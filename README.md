@@ -1,194 +1,215 @@
 # System Automation
 
-Gmail, Calendar, Puppeteer browser control, and system cleanup tools.
+Gmail, Calendar, and Playwright browser automation CLI with cross-browser support (Chromium, Firefox, WebKit).
 
 ## Quick Start
 
 ```bash
 npm install
-node auth.js              # Authenticate with Google
-node gmail.js list        # View emails
-node gmail.js clear       # Delete all emails
-node unsubscribe.js       # Unsubscribe from mailing lists
-node calendar.js list     # View upcoming events
-node calendar.js free     # Find free slots today
+npx playwright install          # Install browser engines
+node cli.js auth                # Authenticate with Google
+node cli.js gmail list          # View emails
+node cli.js browser open https://example.com
 ```
 
-## System Automation Link Tree
+## Feature Tree
 
 ```mermaid
 graph TD
-    ROOT[System Automation Hub] --> PROC[Process Manager]
-    ROOT --> CLEAN[Temp Cleaner]
-    ROOT --> GMAIL[Gmail Manager]
-    ROOT --> CAL[Calendar Manager]
-    ROOT --> PUP[Puppeteer]
+    SA[System Automation CLI] --> GMAIL[Gmail]
+    SA --> CAL[Calendar]
+    SA --> BROWSER[Browser - Playwright]
+    SA --> OTHER[Other]
 
-    PROC --> KILL1[Kill Spotify]
-    PROC --> KILL2[Kill Discord]
-    PROC --> MONITOR[Monitor Usage]
+    GMAIL --> G1[list - View emails]
+    GMAIL --> G2[send - Send email]
+    GMAIL --> G3[clear - Delete emails]
+    GMAIL --> G4[unsubscribe - Cleanup lists]
 
-    CLEAN --> USER_TEMP[User Temp Files]
-    CLEAN --> WIN_TEMP[Windows Temp]
-    CLEAN --> DNS[Flush DNS]
+    CAL --> C1[list - View events]
+    CAL --> C2[create - Add event]
+    CAL --> C3[delete - Remove event]
+    CAL --> C4[free - Find slots]
 
-    GMAIL --> AUTH[OAuth2 Auth]
-    GMAIL --> LIST[List Emails]
-    GMAIL --> CLEAR[Clear Inbox]
-    GMAIL --> SEND[Send Email]
-    GMAIL --> UNSUB[Unsubscribe]
+    BROWSER --> NAV[Navigation]
+    BROWSER --> SS[Screenshots]
+    BROWSER --> ME[Mouse Emulation]
+    BROWSER --> ADV[Advanced]
 
-    CAL --> CAL_LIST[List Events]
-    CAL --> CAL_CREATE[Create Event]
-    CAL --> CAL_FREE[Find Free Slots]
+    NAV --> N1[open - Navigate]
+    NAV --> N2[text - Extract text]
+    NAV --> N3[fill - Form submission]
+    NAV --> N4[exec - Run JavaScript]
+    NAV --> N5[download - Save HTML]
+    NAV --> N6[cookies - Get cookies]
+    NAV --> N7[headers - Meta tags]
+    NAV --> N8[tabs - Multi-tab]
 
-    PUP --> DEMO[Demo Script]
-    PUP --> SCREENSHOT[Take Screenshots]
+    SS --> S1[screenshot - Full page]
+    SS --> S2[viewport - Custom size]
+    SS --> S3[element - Screenshot element]
+    SS --> S4[clip - Clipped region]
+    SS --> S5[compare - Side by side]
+    SS --> S6[pdf - Save as PDF]
+    SS --> S7[multi-shot - Timed series]
+    SS --> S8[cross-browser - Test all]
 
-    AUTH --> CLIENT[Client ID]
-    AUTH --> SECRET[Client Secret]
-    AUTH --> TOKEN[Token Storage]
+    ME --> M1[move - Bezier curve]
+    ME --> M2[click - Click at xy]
+    ME --> M3[double-click]
+    ME --> M4[right-click]
+    ME --> M5[drag - Drag path]
+    ME --> M6[hover - Hold position]
+    ME --> M7[scroll - Mouse wheel]
+    ME --> M8[path - Waypoints]
+    ME --> M9[wiggle - Human idle]
 
-    LIST --> API[Gmail API]
-    CLEAR --> API
-    SEND --> API
-    UNSUB --> API
-    CAL_LIST --> CAL_API[Calendar API]
-    CAL_CREATE --> CAL_API
-    CAL_FREE --> CAL_API
-    API --> GOOGLE[Google Servers]
-    CAL_API --> GOOGLE
+    ADV --> A1[a11y - Accessibility tree]
+    ADV --> A2[intercept - Block resources]
 
-    style ROOT fill:#ff6b6b,stroke:#333,color:white
+    OTHER --> O1[auth - Google OAuth]
+    OTHER --> O2[unsubscribe - Mailing lists]
+
+    style SA fill:#ff6b6b,stroke:#333,color:white
     style GMAIL fill:#4ecdc4,stroke:#333,color:white
     style CAL fill:#9b59b6,stroke:#333,color:white
-    style PROC fill:#45b7d1,stroke:#333,color:white
-    style CLEAN fill:#96ceb4,stroke:#333,color:white
-    style PUP fill:#feca57,stroke:#333,color:white
-    style API fill:#ff9ff3,stroke:#333,color:white
-    style CAL_API fill:#c39bd3,stroke:#333,color:white
-    style GOOGLE fill:#54a0ff,stroke:#333,color:white
+    style BROWSER fill:#feca57,stroke:#333,color:white
+    style NAV fill:#45b7d1,stroke:#333,color:white
+    style SS fill:#96ceb4,stroke:#333,color:white
+    style ME fill:#ff9ff3,stroke:#333,color:white
+    style ADV fill:#c39bd3,stroke:#333,color:white
+    style OTHER fill:#54a0ff,stroke:#333,color:white
 ```
 
-## File & Dependency Graph
+## Browser Commands (Playwright)
+
+All browser commands support cross-browser testing. Append `chromium`, `firefox`, or `webkit` to any command:
+
+```bash
+node cli.js browser open https://example.com chromium   # Default
+node cli.js browser open https://example.com firefox    # Firefox
+node cli.js browser open https://example.com webkit     # Safari engine
+```
+
+### Navigation
+
+| Command | Description |
+|---------|-------------|
+| `browser open <url>` | Navigate and print title |
+| `browser text <url>` | Extract page text |
+| `browser fill <url> <sel> <val>` | Fill form and submit |
+| `browser exec <url> <js>` | Run JavaScript in page |
+| `browser download <url>` | Save page HTML |
+| `browser cookies <url>` | Get page cookies |
+| `browser headers <url>` | Get meta tags |
+| `browser tabs <url1> <url2>` | Open multiple tabs |
+
+### Screenshots
+
+| Command | Description |
+|---------|-------------|
+| `browser screenshot <url>` | Full-page screenshot |
+| `browser viewport <url> 375x667` | Mobile viewport |
+| `browser element <url> #logo` | Screenshot element |
+| `browser clip <url> '{"x":0,"y":0,"width":500,"height":500}'` | Clipped region |
+| `browser compare <url1> <url2>` | Side-by-side comparison |
+| `browser pdf <url>` | Save as PDF |
+| `browser multi-shot <url> 5 1000` | 5 screenshots, 1s apart |
+| `browser cross-browser <url>` | Test all 3 browsers |
+
+### Mouse Emulation
+
+| Command | Description |
+|---------|-------------|
+| `browser move <url> 100 100 500 400` | Bezier curve movement |
+| `browser click <url> 400 300` | Click at coordinates |
+| `browser double-click <url> 400 300` | Double-click |
+| `browser right-click <url> 400 300` | Right-click |
+| `browser drag <url> 100 100 500 300` | Drag with bezier path |
+| `browser hover <url> 400 300 2000` | Hover for 2 seconds |
+| `browser scroll <url> 400 300 0 500` | Scroll down 500px |
+| `browser path <url> 100,100 200,200 300,100` | Move through points |
+| `browser wiggle <url> 400 300 25 1500` | Wiggle for 1.5s |
+
+### Advanced
+
+| Command | Description |
+|---------|-------------|
+| `browser a11y <url>` | Accessibility tree |
+| `browser intercept <url> image,css` | Block resources |
+
+## Gmail Commands
+
+| Command | Description |
+|---------|-------------|
+| `gmail list [count]` | List recent emails |
+| `gmail send <to> <subject> <body>` | Send email |
+| `gmail clear` | Delete first 100 emails |
+
+## Calendar Commands
+
+| Command | Description |
+|---------|-------------|
+| `calendar list [count]` | List upcoming events |
+| `calendar create <title> <start> <end>` | Create event |
+| `calendar delete <eventId>` | Delete event |
+| `calendar free [date]` | Find free slots |
+
+## File Structure
 
 ```mermaid
 graph LR
-    subgraph Files[".env Files"]
-        ENV1[.env<br/>OAuth Credentials]
-        ENV2[token.json<br/>Auth Token]
+    subgraph Config["Config"]
+        ENV[.env<br/>OAuth secrets]
+        TOKEN[token.json<br/>Auth token]
     end
 
-    subgraph Scripts["Node.js Scripts"]
-        S1[auth.js<br/>OAuth Server]
-        S2[gmail.js<br/>Email Operations]
-        S3[unsubscribe.js<br/>List Cleanup]
-        S4[demo.js<br/>Browser Demo]
-        S5[calendar.js<br/>Calendar Operations]
+    subgraph Core["Core Files"]
+        CLI[cli.js<br/>Main entry]
+        PW[playwright.js<br/>Browser engine]
+        AUTH[auth.js<br/>OAuth server]
     end
 
-    subgraph Dependencies["npm Packages"]
-        D1[googleapis]
-        D2[dotenv]
-        D3[express]
-        D4[puppeteer]
+    subgraph Services["Services"]
+        GMAIL[gmail.js<br/>Email ops]
+        CAL[calendar.js<br/>Calendar ops]
+        UNSUB[unsubscribe.js<br/>List cleanup]
     end
 
-    subgraph Commands["CLI Commands"]
-        C1[node gmail.js list]
-        C2[node gmail.js clear]
-        C3[node gmail.js send]
-        C4[node unsubscribe.js]
-        C5[node auth.js]
-        C6[node demo.js]
-        C7[node calendar.js list]
-        C8[node calendar.js create]
-        C9[node calendar.js free]
+    subgraph Browser["Browser"]
+        BH[browser-harness/<br/>Standalone repo]
     end
 
-    ENV1 --> S1
-    ENV1 --> S2
-    ENV1 --> S3
-    ENV1 --> S5
-    ENV2 --> S2
-    ENV2 --> S3
-    ENV2 --> S5
+    subgraph Output["Output"]
+        SS[screenshots/<br/>Captured images]
+    end
 
-    S1 --> D1
-    S1 --> D2
-    S1 --> D3
-    S2 --> D1
-    S2 --> D2
-    S3 --> D1
-    S3 --> D2
-    S4 --> D4
-    S5 --> D1
-    S5 --> D2
+    CLI --> PW
+    CLI --> GMAIL
+    CLI --> CAL
+    CLI --> UNSUB
+    CLI --> AUTH
+    PW --> SS
+    GMAIL --> ENV
+    GMAIL --> TOKEN
+    CAL --> ENV
+    CAL --> TOKEN
+    AUTH --> ENV
 
-    C1 --> S2
-    C2 --> S2
-    C3 --> S2
-    C4 --> S3
-    C5 --> S1
-    C6 --> S4
-    C7 --> S5
-    C8 --> S5
-    C9 --> S5
-
-    style ENV1 fill:#e74c3c,color:white
-    style ENV2 fill:#e74c3c,color:white
-    style S1 fill:#3498db,color:white
-    style S2 fill:#3498db,color:white
-    style S3 fill:#3498db,color:white
-    style S4 fill:#3498db,color:white
-    style S5 fill:#9b59b6,color:white
-```
-
-## Request Flow
-
-```mermaid
-flowchart TD
-    START([User Request]) --> TYPE{Request Type}
-
-    TYPE -->|System| SYS[System Cleanup]
-    TYPE -->|Email| EMAIL[Email Operations]
-    TYPE -->|Calendar| CAL[Calendar Operations]
-    TYPE -->|Browser| BROW[Browser Automation]
-
-    SYS --> P1[Get Processes]
-    P1 --> P2{High Usage?}
-    P2 -->|Yes| P3[Kill Process]
-    P2 -->|No| P4[Skip]
-    P3 --> P5[Log Result]
-
-    SYS --> T1[Find Temp Files]
-    T1 --> T2[Delete Files]
-    T2 --> T3[Flush DNS]
-
-    EMAIL --> E1{Auth Valid?}
-    E1 -->|No| E2[Run auth.js]
-    E2 --> E3[OAuth Flow]
-    E3 --> E4[Save Token]
-    E1 -->|Yes| E5{Action?}
-    E5 -->|List| E6[Fetch Messages]
-    E5 -->|Clear| E7[Delete All]
-    E5 -->|Send| E8[Compose & Send]
-    E5 -->|Unsub| E9[Find Unsub Links]
-    E9 --> E10[Hit URLs]
-
-    CAL --> C1{Action?}
-    C1 -->|List| C2[Fetch Events]
-    C1 -->|Create| C3[Add Event]
-    C1 -->|Free| C4[Check Availability]
-
-    BROW --> B1[Launch Chrome]
-    B1 --> B2[Navigate]
-    B2 --> B3[Take Screenshot]
-    B3 --> B4[Save File]
-
-    START --> DONE([Complete])
-
-    style START fill:#2ecc71,color:white
-    style DONE fill:#e74c3c,color:white
+    style CLI fill:#ff6b6b,color:white
+    style PW fill:#feca57,color:white
+    style GMAIL fill:#4ecdc4,color:white
     style CAL fill:#9b59b6,color:white
 ```
+
+## Dependencies
+
+- **playwright** — Cross-browser automation (Chromium, Firefox, WebKit)
+- **puppeteer** — Legacy Chrome automation (kept for compatibility)
+- **googleapis** — Gmail and Calendar APIs
+- **dotenv** — Environment variable loading
+- **express** — OAuth callback server
+
+## License
+
+MIT
