@@ -253,6 +253,150 @@ async function checkStealthHealth() {
   }
 }
 
+// ── WordPress Login Bypass ─────────────────────────────
+
+const WP_LOGIN_PATTERNS = [
+  /wp-login\.php/,
+  /wp-login/,
+  /wordpress.*login/,
+  /login.*wordpress/,
+];
+
+function isWpLoginUrl(url) {
+  return WP_LOGIN_PATTERNS.some(p => p.test(url));
+}
+
+async function wpLogin(url, options = {}, browserType = 'chromium', useExtensions = false, useStealth = true) {
+  const { userId, username, password } = options;
+  const browser = await launchBrowser(browserType, false, useExtensions, useStealth);
+
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
+
+    const currentUrl = page.url();
+    const isLogin = isWpLoginUrl(currentUrl) || await page.locator('#loginform').count() > 0 || await page.locator('#user_login').count() > 0;
+
+    if (!isLogin) {
+      console.log('[wp-login] Not a WordPress login page, navigating normally');
+      console.log(`URL: ${currentUrl}`);
+      return { status: 'not_login_page', url: currentUrl };
+    }
+
+    console.log('[wp-login] Detected WordPress login page');
+
+    if (userId) {
+      console.log(`[wp-login] Attempting AJAX bypass as user ID: ${userId}`);
+      try {
+        const ajaxUrl = new URL('wp-admin/admin-ajax.php', url).href;
+        const result = await page.evaluate(async ({ ajaxUrl, userId }) => {
+          const formData = new URLSearchParams();
+          formData.append('action', 'bypass_login');
+          formData.append('user_id', userId);
+          const resp = await fetch(ajaxUrl, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+          });
+          const text = await resp.text();
+          return { status: resp.status, body: text.trim() };
+        }, { ajaxUrl, userId });
+
+        if (result.body === '1') {
+          console.log('[wp-login] AJAX bypass successful, redirecting to admin');
+          await page.goto(new URL('wp-admin/', url).href, { waitUntil: 'networkidle', timeout: 30000 });
+          const finalUrl = page.url();
+          console.log(`[wp-login] Landed on: ${finalUrl}`);
+          const cookies = await context.cookies();
+          return { status: 'success', method: 'ajax_bypass', url: finalUrl, cookies };
+        } else {
+          console.log(`[wp-login] AJAX bypass returned: ${result.body}`);
+        }
+      } catch (e) {
+        console.log(`[wp-login] AJAX bypass failed: ${e.message}`);
+      }
+    }
+
+    if (username && password) {
+      console.log(`[wp-login] Attempting form login as: ${username}`);
+      try {
+        await page.fill('#user_login', username);
+        await randomDelay(50, 150);
+        await page.fill('#user_pass', password);
+        await randomDelay(50, 150);
+        await page.click('#wp-submit');
+        await page.waitForURL(url => !url.href.includes('wp-login'), { timeout: 15000 });
+        const finalUrl = page.url();
+        console.log(`[wp-login] Form login successful, landed on: ${finalUrl}`);
+        const cookies = await context.cookies();
+        return { status: 'success', method: 'form_login', url: finalUrl, cookies };
+      } catch (e) {
+        console.log(`[wp-login] Form login failed: ${e.message}`);
+      }
+    }
+
+    if (userId && !username) {
+      console.log('[wp-login] AJAX bypass failed and no credentials provided');
+      console.log('[wp-login] Tip: Use --username and --password for form login fallback');
+    }
+
+    console.log('[wp-login] Login bypass unsuccessful');
+    return { status: 'failed', url: page.url() };
+
+  } finally {
+    await browser.close();
+  }
+}
+
+async function wpGetUsers(url, browserType = 'chromium', useExtensions = false, useStealth = true) {
+  const browser = await launchBrowser(browserType, false, useExtensions, useStealth);
+
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
+
+    const currentUrl = page.url();
+    const isLogin = isWpLoginUrl(currentUrl) || await page.locator('#loginform').count() > 0 || await page.locator('#user_login').count() > 0;
+
+    if (!isLogin) {
+      console.log('[wp-login] Not a WordPress login page');
+      return { status: 'not_login_page' };
+    }
+
+    console.log('[wp-login] Scanning for available users on login page...');
+
+    const users = await page.evaluate(() => {
+      const results = [];
+      const selects = document.querySelectorAll('select');
+      for (const sel of selects) {
+        for (const opt of sel.options) {
+          if (opt.value && opt.value !== '-1' && opt.value !== '') {
+            results.push({ id: opt.value, label: opt.textContent.trim() });
+          }
+        }
+      }
+      return results;
+    });
+
+    if (users.length > 0) {
+      console.log(`[wp-login] Found ${users.length} users (bypass-login plugin detected):`);
+      users.forEach(u => console.log(`  ID: ${u.id} - ${u.label}`));
+    } else {
+      console.log('[wp-login] No bypass-login plugin detected, no user dropdown found');
+      console.log('[wp-login] Use --username and --password for form login');
+    }
+
+    return { status: 'success', users };
+
+  } finally {
+    await browser.close();
+  }
+}
+
 function randomDelay(min = 5, max = 25) {
   return Math.floor(Math.random() * (max - min) + min);
 }
@@ -809,6 +953,8 @@ module.exports = {
   launchStealthBrowser,
   connectStealth,
   checkStealthHealth,
+  wpLogin,
+  wpGetUsers,
   nav,
   getText,
   fillAndSubmit,
@@ -882,6 +1028,13 @@ Advanced:
   a11y <url>                        Accessibility tree
   intercept <url> [types]          Block resource types
   stealth-health                   Check rayobrowse daemon status
+
+WordPress:
+  wp-login <url> [opts]            Bypass WP login (AJAX or form)
+    --user-id=<id>                 Login as user ID (requires bypass-login plugin)
+    --username=<user>              Login with username (form fallback)
+    --password=<pass>              Login with password (form fallback)
+  wp-users <url>                   List available users on login page
 `);
 }
 
@@ -906,6 +1059,27 @@ Advanced:
   const validBrowsers = ['chromium', 'firefox', 'webkit'];
   const browser = validBrowsers.includes(browserType) ? browserType : 'chromium';
   const cmdArgs = validBrowsers.includes(browserType) ? filteredArgs.slice(0, -1) : filteredArgs;
+
+  if (command === 'wp-login') {
+    const url = cmdArgs[0];
+    const userId = cmdArgs.find(a => a.startsWith('--user-id='));
+    const username = cmdArgs.find(a => a.startsWith('--username='));
+    const password = cmdArgs.find(a => a.startsWith('--password='));
+    const options = {};
+    if (userId) options.userId = userId.split('=')[1];
+    if (username) options.username = username.split('=')[1];
+    if (password) options.password = password.split('=')[1];
+    const result = await wpLogin(url, options, browser, useExtensions, useStealth);
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === 'wp-users') {
+    const url = cmdArgs[0];
+    const result = await wpGetUsers(url, browser, useExtensions, useStealth);
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
 
   try {
     switch (command) {

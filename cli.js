@@ -12,7 +12,7 @@ const {
   mouseMove, mouseClick, mouseDoubleClick, mouseRightClick, mouseDrag,
   mouseHover, mouseScroll, mousePath, mouseWiggle,
   getAccessibilityTree, interceptRequests,
-  checkStealthHealth,
+  checkStealthHealth, wpLogin, wpGetUsers,
 } = require('./playwright');
 
 const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI } = process.env;
@@ -289,6 +289,13 @@ Other:
   auth                               Authenticate with Google
   stealth-health                     Check rayobrowse daemon status
 
+WordPress:
+  wp-login <url> [opts]              Bypass WP login (AJAX or form)
+    --user-id=<id>                   Login as user ID (bypass-login plugin)
+    --username=<user>                Login with username (form fallback)
+    --password=<pass>                Login with password (form fallback)
+  wp-users <url>                     List available users on login page
+
 Flags:
   --ext                              Enable ad/tracker blocking + cookie dismissal
   --no-stealth                       Disable rayobrowse stealth browser
@@ -361,6 +368,25 @@ Append engine name to use Firefox/WebKit: ... chromium (default)
       case 'stealth-health':
         await checkStealthHealth();
         break;
+      case 'wp-login': {
+        const url = sub;
+        const userIdFlag = cmdArgs.find(a => a.startsWith('--user-id='));
+        const usernameFlag = cmdArgs.find(a => a.startsWith('--username='));
+        const passwordFlag = cmdArgs.find(a => a.startsWith('--password='));
+        const opts = {};
+        if (userIdFlag) opts.userId = userIdFlag.split('=')[1];
+        if (usernameFlag) opts.username = usernameFlag.split('=')[1];
+        if (passwordFlag) opts.password = passwordFlag.split('=')[1];
+        const result = await wpLogin(url, opts, browserType, useExt, useStealth);
+        console.log(JSON.stringify(result, null, 2));
+        break;
+      }
+      case 'wp-users': {
+        const url = sub;
+        const result = await wpGetUsers(url, browserType, useExt, useStealth);
+        console.log(JSON.stringify(result, null, 2));
+        break;
+      }
       default:
         usage();
     }
