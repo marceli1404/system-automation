@@ -12,6 +12,7 @@ const {
   mouseMove, mouseClick, mouseDoubleClick, mouseRightClick, mouseDrag,
   mouseHover, mouseScroll, mousePath, mouseWiggle,
   getAccessibilityTree, interceptRequests,
+  checkStealthHealth,
 } = require('./playwright');
 
 const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI } = process.env;
@@ -222,16 +223,20 @@ function auth() {
 
 // ── CLI Router ─────────────────────────────────────────
 
-const [,, cmd, sub, ...args] = process.argv;
+const [,, cmd, sub, ...rawArgs] = process.argv;
+
+const useExt = rawArgs.includes('--ext');
+const useStealth = rawArgs.includes('--stealth');
+const filteredArgs = rawArgs.filter(a => a !== '--ext' && a !== '--stealth');
 
 const VALID_BROWSERS = ['chromium', 'firefox', 'webkit'];
-const lastArg = args[args.length - 1];
+const lastArg = filteredArgs[filteredArgs.length - 1];
 const browserType = VALID_BROWSERS.includes(lastArg) ? lastArg : 'chromium';
-const cmdArgs = VALID_BROWSERS.includes(lastArg) ? args.slice(0, -1) : args;
+const cmdArgs = VALID_BROWSERS.includes(lastArg) ? filteredArgs.slice(0, -1) : filteredArgs;
 
 function usage() {
   console.log(`
-Usage: node cli.js <command> <subcommand> [args]
+Usage: node cli.js <command> <subcommand> [args] [--ext] [--stealth]
 
 Gmail:
   gmail list [count]                 List recent emails
@@ -282,6 +287,11 @@ Advanced:
 Other:
   unsubscribe [maxEmails]            Unsubscribe from mailing lists
   auth                               Authenticate with Google
+  stealth-health                     Check rayobrowse daemon status
+
+Flags:
+  --ext                              Enable ad/tracker blocking + cookie dismissal
+  --stealth                          Use rayobrowse stealth browser (anti-bot evasion)
 
 Append engine name to use Firefox/WebKit: ... chromium (default)
 `);
@@ -304,42 +314,42 @@ Append engine name to use Firefox/WebKit: ... chromium (default)
         else usage();
         break;
       case 'browser':
-        if (sub === 'open') await nav(cmdArgs[0], browserType);
-        else if (sub === 'text') await getText(cmdArgs[0], browserType);
-        else if (sub === 'fill') await fillAndSubmit(cmdArgs[0], cmdArgs[1], cmdArgs.slice(2).join(' '), browserType);
-        else if (sub === 'exec') await execScript(cmdArgs[0], cmdArgs.slice(1).join(' '), browserType);
-        else if (sub === 'download') await downloadPage(cmdArgs[0], cmdArgs[1], browserType);
-        else if (sub === 'cookies') await cookies(cmdArgs[0], browserType);
-        else if (sub === 'headers') await headers(cmdArgs[0], browserType);
-        else if (sub === 'tabs') await multiTab(cmdArgs, browserType);
-        else if (sub === 'screenshot') await screenshotFullPage(cmdArgs[0], cmdArgs[1], browserType);
+        if (sub === 'open') await nav(cmdArgs[0], browserType, useExt, useStealth);
+        else if (sub === 'text') await getText(cmdArgs[0], browserType, useExt, useStealth);
+        else if (sub === 'fill') await fillAndSubmit(cmdArgs[0], cmdArgs[1], cmdArgs.slice(2).join(' '), browserType, useExt, useStealth);
+        else if (sub === 'exec') await execScript(cmdArgs[0], cmdArgs.slice(1).join(' '), browserType, useExt, useStealth);
+        else if (sub === 'download') await downloadPage(cmdArgs[0], cmdArgs[1], browserType, useExt, useStealth);
+        else if (sub === 'cookies') await cookies(cmdArgs[0], browserType, useExt, useStealth);
+        else if (sub === 'headers') await headers(cmdArgs[0], browserType, useExt, useStealth);
+        else if (sub === 'tabs') await multiTab(cmdArgs, browserType, useExt, useStealth);
+        else if (sub === 'screenshot') await screenshotFullPage(cmdArgs[0], cmdArgs[1], browserType, useExt, useStealth);
         else if (sub === 'viewport') {
           const [w, h] = (cmdArgs[1] || '1920x1080').split('x').map(Number);
-          await screenshotViewport(cmdArgs[0], null, { width: w, height: h }, browserType);
+          await screenshotViewport(cmdArgs[0], null, { width: w, height: h }, browserType, useExt, useStealth);
         }
-        else if (sub === 'element') await screenshotElement(cmdArgs[0], null, cmdArgs[1], browserType);
-        else if (sub === 'clip') await screenshotClip(cmdArgs[0], null, JSON.parse(cmdArgs[1] || '{}'), browserType);
-        else if (sub === 'compare') await screenshotCompare(cmdArgs[0], cmdArgs[1], browserType);
-        else if (sub === 'pdf') await screenshotPdf(cmdArgs[0], cmdArgs[1], browserType);
-        else if (sub === 'multi-shot') await screenshotMultiple(cmdArgs[0], parseInt(cmdArgs[1]) || 3, parseInt(cmdArgs[2]) || 1000, browserType);
-        else if (sub === 'cross-browser') await crossBrowserTest(cmdArgs[0]);
-        else if (sub === 'move') await mouseMove(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), { steps: parseInt(cmdArgs[5]) || 20 }, browserType);
-        else if (sub === 'click') await mouseClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { button: cmdArgs[3] || 'left' }, browserType);
-        else if (sub === 'double-click') await mouseDoubleClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browserType);
-        else if (sub === 'right-click') await mouseRightClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browserType);
-        else if (sub === 'drag') await mouseDrag(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), {}, browserType);
-        else if (sub === 'hover') await mouseHover(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { duration: parseInt(cmdArgs[3]) || 1000 }, browserType);
-        else if (sub === 'scroll') await mouseScroll(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]) || 0, parseInt(cmdArgs[4]) || 100, browserType);
+        else if (sub === 'element') await screenshotElement(cmdArgs[0], null, cmdArgs[1], browserType, useExt, useStealth);
+        else if (sub === 'clip') await screenshotClip(cmdArgs[0], null, JSON.parse(cmdArgs[1] || '{}'), browserType, useExt, useStealth);
+        else if (sub === 'compare') await screenshotCompare(cmdArgs[0], cmdArgs[1], browserType, useExt, useStealth);
+        else if (sub === 'pdf') await screenshotPdf(cmdArgs[0], cmdArgs[1], browserType, useExt, useStealth);
+        else if (sub === 'multi-shot') await screenshotMultiple(cmdArgs[0], parseInt(cmdArgs[1]) || 3, parseInt(cmdArgs[2]) || 1000, browserType, useExt, useStealth);
+        else if (sub === 'cross-browser') await crossBrowserTest(cmdArgs[0], undefined, useExt, useStealth);
+        else if (sub === 'move') await mouseMove(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), { steps: parseInt(cmdArgs[5]) || 20 }, browserType, useExt, useStealth);
+        else if (sub === 'click') await mouseClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { button: cmdArgs[3] || 'left' }, browserType, useExt, useStealth);
+        else if (sub === 'double-click') await mouseDoubleClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browserType, useExt, useStealth);
+        else if (sub === 'right-click') await mouseRightClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browserType, useExt, useStealth);
+        else if (sub === 'drag') await mouseDrag(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), {}, browserType, useExt, useStealth);
+        else if (sub === 'hover') await mouseHover(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { duration: parseInt(cmdArgs[3]) || 1000 }, browserType, useExt, useStealth);
+        else if (sub === 'scroll') await mouseScroll(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]) || 0, parseInt(cmdArgs[4]) || 100, browserType, useExt, useStealth);
         else if (sub === 'path') {
           const points = cmdArgs.slice(1).map(a => {
             const [x, y] = a.split(',').map(Number);
             return { x, y };
           });
-          await mousePath(cmdArgs[0], points, {}, browserType);
+          await mousePath(cmdArgs[0], points, {}, browserType, useExt, useStealth);
         }
-        else if (sub === 'wiggle') await mouseWiggle(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { radius: parseInt(cmdArgs[3]) || 20, duration: parseInt(cmdArgs[4]) || 2000 }, browserType);
-        else if (sub === 'a11y') await getAccessibilityTree(cmdArgs[0], browserType);
-        else if (sub === 'intercept') await interceptRequests(cmdArgs[0], cmdArgs[1] ? cmdArgs[1].split(',') : ['image'], browserType);
+        else if (sub === 'wiggle') await mouseWiggle(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { radius: parseInt(cmdArgs[3]) || 20, duration: parseInt(cmdArgs[4]) || 2000 }, browserType, useExt, useStealth);
+        else if (sub === 'a11y') await getAccessibilityTree(cmdArgs[0], browserType, useExt, useStealth);
+        else if (sub === 'intercept') await interceptRequests(cmdArgs[0], cmdArgs[1] ? cmdArgs[1].split(',') : ['image'], browserType, useExt, useStealth);
         else usage();
         break;
       case 'unsubscribe':
@@ -347,6 +357,9 @@ Append engine name to use Firefox/WebKit: ... chromium (default)
         break;
       case 'auth':
         auth();
+        break;
+      case 'stealth-health':
+        await checkStealthHealth();
         break;
       default:
         usage();
