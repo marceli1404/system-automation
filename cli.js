@@ -212,16 +212,101 @@ function auth() {
   });
 }
 
-// ── Screenshot ─────────────────────────────────────────
+// ── Browser ────────────────────────────────────────────
 
-async function screenshot(url, output) {
+const SCREENSHOTS_DIR = require('path').join(__dirname, 'screenshots');
+
+async function ensureDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+async function launchBrowser() {
+  await ensureDir(SCREENSHOTS_DIR);
   const puppeteer = require('puppeteer');
-  const browser = await puppeteer.launch({ headless: false });
+  return puppeteer.launch({
+    headless: false,
+    args: ['--remote-debugging-port=9222', '--no-first-run', '--disable-extensions'],
+  });
+}
+
+async function browserOpen(url) {
+  const browser = await launchBrowser();
   const page = await browser.newPage();
-  await page.goto(url);
-  console.log('Page title:', await page.title());
-  await page.screenshot({ path: output, fullPage: true });
-  console.log(`Screenshot saved to ${output}`);
+  await page.goto(url, { waitUntil: 'networkidle2' });
+  console.log(`Title: ${await page.title()}`);
+  console.log(`URL: ${page.url()}`);
+  await browser.close();
+}
+
+async function browserScreenshot(url, filename) {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  await page.goto(url, { waitUntil: 'networkidle2' });
+  const name = filename || `screenshot-${Date.now()}.png`;
+  const outPath = require('path').join(SCREENSHOTS_DIR, name);
+  await page.screenshot({ path: outPath, fullPage: true });
+  console.log(`Screenshot saved: ${outPath}`);
+  console.log(`Title: ${await page.title()}`);
+  await browser.close();
+}
+
+async function browserText(url) {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  await page.goto(url, { waitUntil: 'networkidle2' });
+  const text = await page.evaluate(() => document.body.innerText);
+  console.log(text);
+  await browser.close();
+}
+
+async function browserFill(url, selector, value) {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  await page.goto(url, { waitUntil: 'networkidle2' });
+  await page.type(selector, value);
+  await page.keyboard.press('Enter');
+  await new Promise(r => setTimeout(r, 2000));
+  console.log(`Title: ${await page.title()}`);
+  const name = `form-result-${Date.now()}.png`;
+  const outPath = require('path').join(SCREENSHOTS_DIR, name);
+  await page.screenshot({ path: outPath, fullPage: true });
+  console.log(`Result: ${outPath}`);
+  await browser.close();
+}
+
+async function browserExec(url, script) {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  await page.goto(url, { waitUntil: 'networkidle2' });
+  const result = await page.evaluate(script);
+  console.log(JSON.stringify(result, null, 2));
+  await browser.close();
+}
+
+async function browserDownload(url, output) {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  await page.goto(url, { waitUntil: 'networkidle2' });
+  const html = await page.content();
+  const name = output || `page-${Date.now()}.html`;
+  const outPath = require('path').join(__dirname, name);
+  fs.writeFileSync(outPath, html);
+  console.log(`Saved: ${outPath} (${html.length} bytes)`);
+  await browser.close();
+}
+
+async function browserTabs(urls) {
+  const browser = await launchBrowser();
+  for (const url of urls) {
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    console.log(`${url} -> ${await page.title()}`);
+  }
+  const pages = await browser.pages();
+  const name = `multi-tab-${Date.now()}.png`;
+  const outPath = require('path').join(SCREENSHOTS_DIR, name);
+  await pages[pages.length - 1].screenshot({ path: outPath, fullPage: true });
+  console.log(`Last tab screenshot: ${outPath}`);
   await browser.close();
 }
 
@@ -243,11 +328,16 @@ Commands:
   calendar delete <eventId>       Delete an event
   calendar free [date]            Find free slots (YYYY-MM-DD)
 
+  browser open <url>              Navigate and print title
+  browser screenshot <url> [file] Save full-page screenshot
+  browser text <url>              Extract page text
+  browser fill <url> <sel> <val>  Fill input and submit
+  browser exec <url> <js>         Run JS in page context
+  browser download <url> [file]   Save page HTML
+  browser tabs <url1> <url2> ...  Open multiple tabs
+
   unsubscribe [maxEmails]         Unsubscribe from mailing lists
-
   auth                            Authenticate with Google
-
-  screenshot <url> [output]       Take a screenshot of a URL
 `);
 }
 
@@ -267,14 +357,21 @@ Commands:
         else if (sub === 'free') await calendarFree(args[0] || new Date().toISOString().split('T')[0]);
         else usage();
         break;
+      case 'browser':
+        if (sub === 'open') await browserOpen(args[0] || 'https://example.com');
+        else if (sub === 'screenshot') await browserScreenshot(args[0] || 'https://example.com', args[1]);
+        else if (sub === 'text') await browserText(args[0] || 'https://example.com');
+        else if (sub === 'fill') await browserFill(args[0], args[1], args.slice(2).join(' '));
+        else if (sub === 'exec') await browserExec(args[0], args.slice(1).join(' '));
+        else if (sub === 'download') await browserDownload(args[0], args[1]);
+        else if (sub === 'tabs') await browserTabs(args);
+        else usage();
+        break;
       case 'unsubscribe':
         await unsubscribe(parseInt(sub) || 50);
         break;
       case 'auth':
         auth();
-        break;
-      case 'screenshot':
-        await screenshot(args[0] || 'https://example.com', args[1] || 'screenshot.png');
         break;
       default:
         usage();

@@ -9,6 +9,7 @@
     "start": "node cli.js",
     "gmail": "node cli.js gmail",
     "calendar": "node cli.js calendar",
+    "browser": "node cli.js browser",
     "unsubscribe": "node cli.js unsubscribe",
     "auth": "node cli.js auth"
   },
