@@ -12,7 +12,7 @@ const {
   mouseMove, mouseClick, mouseDoubleClick, mouseRightClick, mouseDrag,
   mouseHover, mouseScroll, mousePath, mouseWiggle,
   getAccessibilityTree, interceptRequests,
-  checkStealthHealth, wpLogin, wpGetUsers,
+  checkStealthHealth, wpLogin, wpGetUsers, searchAndExtract,
 } = require('./playwright');
 
 const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI } = process.env;
@@ -284,6 +284,9 @@ Advanced:
   browser a11y <url>                 Accessibility tree
   browser intercept <url> [types]    Block resource types
 
+Search:
+  browser search <url> <sel> <query> Search and extract results
+
 Other:
   unsubscribe [maxEmails]            Unsubscribe from mailing lists
   auth                               Authenticate with Google
@@ -357,6 +360,14 @@ Append engine name to use Firefox/WebKit: ... chromium (default)
         else if (sub === 'wiggle') await mouseWiggle(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { radius: parseInt(cmdArgs[3]) || 20, duration: parseInt(cmdArgs[4]) || 2000 }, browserType, useExt, useStealth);
         else if (sub === 'a11y') await getAccessibilityTree(cmdArgs[0], browserType, useExt, useStealth);
         else if (sub === 'intercept') await interceptRequests(cmdArgs[0], cmdArgs[1] ? cmdArgs[1].split(',') : ['image'], browserType, useExt, useStealth);
+        else if (sub === 'search') {
+          const searchUrl = cmdArgs[0];
+          const selector = cmdArgs[1];
+          const query = cmdArgs.slice(2).join(' ');
+          const defaultScript = `JSON.stringify(Array.from(document.querySelectorAll('[data-component-type="s-search-result"]')).slice(0, 15).map(el => ({ title: el.querySelector('h2 a span')?.textContent?.trim() || el.querySelector('h2')?.textContent?.trim(), price: el.querySelector('.a-price .a-offscreen')?.textContent || 'N/A', rating: el.querySelector('.a-icon-alt')?.textContent || 'N/A', reviews: el.querySelector('[aria-label] + span')?.textContent || 'N/A', asin: el.getAttribute('data-asin') })))`;
+          const result = await searchAndExtract(searchUrl, selector, query, defaultScript, {}, browserType, useExt, useStealth);
+          console.log(JSON.stringify(result, null, 2));
+        }
         else usage();
         break;
       case 'unsubscribe':
