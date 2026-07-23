@@ -477,6 +477,28 @@ async function fillAndSubmit(url, selector, value, browserType = 'chromium', use
   }
 }
 
+async function searchAndExtract(url, searchSelector, value, extractScript, options = {}, browserType = 'chromium', useExtensions = false, useStealth = false) {
+  const { waitMs = 3000 } = options;
+  const browser = await launchBrowser(browserType, false, useExtensions, useStealth);
+  try {
+    const page = await browser.newPage();
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
+    await page.fill(searchSelector, value);
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(waitMs);
+    const title = await page.title();
+    const results = await page.evaluate(extractScript);
+    const name = `search-${Date.now()}.png`;
+    const outPath = path.join(SCREENSHOTS_DIR, name);
+    await page.screenshot({ path: outPath, fullPage: true });
+    console.log(`Search: "${value}" | Title: ${title} | Screenshot: ${outPath}`);
+    return { title, results, screenshot: outPath };
+  } finally {
+    await browser.close();
+  }
+}
+
 async function execScript(url, script, browserType = 'chromium', useExtensions = false, useStealth = false) {
   const browser = await launchBrowser(browserType, false, useExtensions, useStealth);
   try {
@@ -958,6 +980,7 @@ module.exports = {
   nav,
   getText,
   fillAndSubmit,
+  searchAndExtract,
   execScript,
   downloadPage,
   cookies,
@@ -1029,6 +1052,10 @@ Advanced:
   intercept <url> [types]          Block resource types
   stealth-health                   Check rayobrowse daemon status
 
+Search:
+  search <url> <selector> <query>  Search and extract results
+    Uses form submission then runs extraction script
+
 WordPress:
   wp-login <url> [opts]            Bypass WP login (AJAX or form)
     --user-id=<id>                 Login as user ID (requires bypass-login plugin)
@@ -1077,6 +1104,16 @@ WordPress:
   if (command === 'wp-users') {
     const url = cmdArgs[0];
     const result = await wpGetUsers(url, browser, useExtensions, useStealth);
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === 'search') {
+    const url = cmdArgs[0];
+    const selector = cmdArgs[1];
+    const query = cmdArgs.slice(2).join(' ');
+    const defaultScript = `JSON.stringify(Array.from(document.querySelectorAll('[data-component-type="s-search-result"]')).slice(0, 15).map(el => ({ title: el.querySelector('h2 a span')?.textContent?.trim() || el.querySelector('h2')?.textContent?.trim(), price: el.querySelector('.a-price .a-offscreen')?.textContent || 'N/A', rating: el.querySelector('.a-icon-alt')?.textContent || 'N/A', reviews: el.querySelector('[aria-label] + span')?.textContent || 'N/A', asin: el.getAttribute('data-asin') })))`;
+    const result = await searchAndExtract(url, selector, query, defaultScript, {}, browser, useExtensions, useStealth);
     console.log(JSON.stringify(result, null, 2));
     return;
   }
