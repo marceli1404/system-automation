@@ -1,17 +1,26 @@
 # System Automation
 
-Gmail, Calendar, and Playwright browser automation CLI with cross-browser support (Chromium, Firefox, WebKit), built-in ad/tracker blocking, automatic cookie banner dismissal, stealth browser integration, and site search with data extraction.
+Gmail, Calendar, and dual-engine browser automation CLI with cross-browser support (Chromium, Firefox, WebKit), Puppeteer-based full browser harness, built-in ad/tracker blocking, automatic cookie banner dismissal, stealth browser integration, and site search with data extraction.
 
 ## Quick Start
 
 ```bash
 npm install
-npx playwright install              # Install browser engines
+npx playwright install              # Install Playwright browser engines
+
+# Google
 node cli.js auth                    # Authenticate with Google
 node cli.js gmail list              # View emails
+
+# Playwright engine (advanced: stealth, ad blocking, search)
 node cli.js browser open https://example.com
 node cli.js browser screenshot https://example.com page.png --ext
 node cli.js browser search https://www.amazon.com "#twotabsearchtextbox" "server parts" --ext
+
+# Puppeteer engine (standalone: mouse emulation, screenshots, multi-tab)
+node browser.js open https://example.com
+node browser.js screenshot https://example.com page.png
+node browser.js move https://example.com 100 100 500 400
 ```
 
 ## Feature Map
@@ -30,42 +39,74 @@ mindmap
       delete — Remove event
       free — Find slots
     Browser
-      Navigation
-        open — Navigate
-        text — Extract text
-        fill — Form submit
-        exec — Run JS
-        download — Save HTML
-        cookies — Get cookies
-        headers — Meta tags
-        tabs — Multi-tab
-      Screenshots
-        screenshot — Full page
-        viewport — Custom size
-        element — Element capture
-        clip — Clipped region
-        compare — Side by side
-        pdf — Save as PDF
-        multi-shot — Timed series
-        cross-browser — Test all 3
-      Mouse Emulation
-        move — Bezier curve
-        click — Click at xy
-        double-click
-        right-click
-        drag — Drag path
-        hover — Hold position
-        scroll — Mouse wheel
-        path — Waypoints
-        wiggle — Human idle
-      Search
-        search — Search + Extract
-      Advanced
-        a11y — Accessibility tree
-        intercept — Block resources
-      WordPress
-        wp-login — Bypass login
-        wp-users — List users
+      Playwright Engine (cli.js browser)
+        Navigation
+          open — Navigate
+          text — Extract text
+          fill — Form submit
+          exec — Run JS
+          download — Save HTML
+          cookies — Get cookies
+          headers — Meta tags
+          tabs — Multi-tab
+        Screenshots
+          screenshot — Full page
+          viewport — Custom size
+          element — Element capture
+          clip — Clipped region
+          compare — Side by side
+          pdf — Save as PDF
+          multi-shot — Timed series
+          cross-browser — Test all 3
+        Mouse Emulation
+          move — Bezier curve
+          click — Click at xy
+          double-click
+          right-click
+          drag — Drag path
+          hover — Hold position
+          scroll — Mouse wheel
+          path — Waypoints
+          wiggle — Human idle
+        Search
+          search — Search + Extract
+        Advanced
+          a11y — Accessibility tree
+          intercept — Block resources
+        WordPress
+          wp-login — Bypass login
+          wp-users — List users
+      Puppeteer Engine (node browser.js)
+        Navigation
+          open — Navigate
+          text — Extract text
+          fill — Form submit
+          exec — Run JS
+          download — Save HTML
+          cookies — Get cookies
+          headers — Meta tags
+          tabs — Multi-tab
+        Screenshots
+          screenshot — Full page
+          viewport — Custom size
+          element — Element capture
+          clip — Clipped region
+          compare — Side by side
+          pdf — Save as PDF
+          multi-shot — Timed series
+        Mouse Emulation
+          move — Bezier curve
+          click — Click at xy
+          double-click
+          right-click
+          drag — Bezier path
+          hover — Hold position
+          scroll — Mouse wheel
+          path — Waypoints
+          wiggle — Human idle
+        Programmatic API
+          30+ exported functions
+          require('./browser')
     Privacy & Protection
       --ext Flag
         Ad/Tracker Blocking
@@ -392,6 +433,86 @@ node cli.js browser screenshot https://example.com page.png webkit
 | `browser wp-login <url> --username=admin --password=pass` | Form login fallback |
 | `browser wp-users <url>` | List available users on login page |
 
+## Puppeteer Browser Engine (`browser.js`)
+
+A standalone 670-line Puppeteer-based browser harness with 30+ exported functions, bezier-curve mouse emulation, and a CLI router. Run directly with `node browser.js <command>` or import programmatically via `require('./browser')`.
+
+### Commands
+
+```bash
+node browser.js <command> [args]
+
+# Navigation
+node browser.js open https://example.com
+node browser.js text https://example.com
+node browser.js fill https://google.com '[name=q]' 'search term'
+node browser.js exec https://example.com 'document.title'
+node browser.js download https://example.com page.html
+node browser.js cookies https://example.com
+node browser.js headers https://example.com
+node browser.js tabs https://google.com https://github.com
+
+# Screenshots
+node browser.js screenshot https://example.com page.png
+node browser.js viewport https://example.com mobile.png 375x667
+node browser.js element https://example.com logo.png '#logo'
+node browser.js clip https://example.com part.png '{"x":0,"y":0,"width":500,"height":500}'
+node browser.js compare https://google.com https://bing.com
+node browser.js pdf https://example.com page.pdf
+node browser.js multi-shot https://example.com 5 2000
+
+# Mouse Emulation (bezier curves)
+node browser.js move https://example.com 100 100 500 400 30
+node browser.js click https://example.com 400 300 left
+node browser.js double-click https://example.com 400 300
+node browser.js right-click https://example.com 400 300
+node browser.js drag https://example.com 100 100 500 300
+node browser.js hover https://example.com 400 300 2000
+node browser.js scroll https://example.com 400 300 0 500
+node browser.js path https://example.com 100,100 200,200 300,100
+node browser.js wiggle https://example.com 400 300 20 2000
+```
+
+### Programmatic API
+
+```javascript
+const {
+  launchBrowser, nav, getText, fillAndSubmit, execScript,
+  downloadPage, cookies, headers,
+  mouseMove, mouseClick, mouseDoubleClick, mouseRightClick,
+  mouseDrag, mouseHover, mouseScroll, mousePath, mouseWiggle,
+  screenshotViewport, screenshotFullPage, screenshotClip,
+  screenshotElement, screenshotPdf, screenshotMultiple, screenshotCompare,
+} = require('./browser');
+
+await screenshotFullPage('https://example.com', 'full.png');
+await mouseMove('https://example.com', 100, 100, 500, 300, { steps: 30 });
+await mouseDrag('https://example.com', 100, 100, 500, 300);
+```
+
+### Demo
+
+```bash
+node demo.js    # Run the full multi-step demo
+```
+
+The demo exercises navigation, screenshots, mouse emulation (bezier curves, drag, hover, scroll, path, wiggle), and form filling across multiple sites.
+
+### Playwright vs Puppeteer
+
+| Feature | Playwright (`cli.js browser`) | Puppeteer (`node browser.js`) |
+|---------|-------------------------------|-------------------------------|
+| Cross-browser | Chromium, Firefox, WebKit | Chrome only |
+| Ad/tracker blocking | Built-in `--ext` route interception | Not built-in |
+| Cookie banner dismissal | Auto-remove overlays | Not built-in |
+| Stealth mode | rayobrowse Docker integration | Not built-in |
+| Site search + extraction | `search` command with structured output | Manual via `fill` + `exec` |
+| Mouse emulation | Bezier curves, 9 commands | Bezier curves, 9 commands |
+| Screenshots | 7 types + cross-browser | 7 types |
+| Multi-tab | Yes | Yes |
+| Programmatic API | 30+ functions | 30+ functions |
+| Standalone usage | `node cli.js browser ...` | `node browser.js ...` |
+
 ## Gmail Commands
 
 | Command | Description |
@@ -420,8 +541,13 @@ graph TD
 
     subgraph Core["Core"]
         CLI["cli.js — Main CLI entry point"]
-        PW["playwright.js — Browser engine, ad blocking, stealth, search, mouse emulation"]
+        PW["playwright.js — Playwright engine, ad blocking, stealth, search, mouse emulation"]
         AUTH["auth.js — OAuth2 callback server"]
+    end
+
+    subgraph Puppeteer["Puppeteer Engine"]
+        BROWSER["browser.js — 670-line Puppeteer harness, 30+ functions, mouse emulation, screenshots"]
+        DEMO["demo.js — Multi-step demo (navigation, screenshots, mouse, forms)"]
     end
 
     subgraph Services["Google Services"]
@@ -433,6 +559,7 @@ graph TD
     subgraph External["External Dependencies"]
         RAYO["rayobrowse — Stealth Chromium Docker daemon"]
         PW_LIB["playwright — Cross-browser automation"]
+        PUP["puppeteer — Chrome automation"]
         GAPI["googleapis — Gmail & Calendar API"]
     end
 
@@ -441,6 +568,7 @@ graph TD
     end
 
     CLI --> PW
+    CLI --> BROWSER
     CLI --> GMAIL
     CLI --> CAL
     CLI --> UNSUB
@@ -448,6 +576,8 @@ graph TD
     PW --> SS
     PW --> RAYO
     PW --> PW_LIB
+    BROWSER --> SS
+    BROWSER --> PUP
     GMAIL --> ENV
     GMAIL --> TOKEN
     GMAIL --> GAPI
@@ -458,46 +588,62 @@ graph TD
 
     style CLI fill:#ff6b6b,color:white
     style PW fill:#feca57,color:white
+    style BROWSER fill:#45aaf2,color:white
     style GMAIL fill:#4ecdc4,color:white
     style CAL fill:#9b59b6,color:white
     style RAYO fill:#e74c3c,color:white
+    style DEMO fill:#a29bfe,color:white
 ```
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    A[User runs command] --> B{--ext flag?}
-    B -->|Yes| C[setupAdBlocking via page.route]
-    B -->|No| D[Skip ad blocking]
-    C --> E{--stealth flag?}
-    D --> E
-    E -->|Yes| F{rayobrowse running?}
-    E -->|No| G[browser.launch]
-    F -->|Yes| H[chromium.connectOverCDP]
-    F -->|No| G
-    H --> I[page.goto]
-    G --> I
-    I --> J{Is search command?}
-    J -->|Yes| K[page.fill + press Enter]
-    J -->|No| L[Execute user action]
-    K --> M[Wait for results]
-    M --> N[page.evaluate extractScript]
-    L --> O[page.screenshot / return data]
-    N --> O
-    C --> P[Filter requests]
-    P --> Q{Domain blocked?}
-    Q -->|Yes| R[route.abort]
-    Q -->|No| S[route.continue]
-    O --> T[Dismiss cookie banners]
-    T --> U[Return results]
+    A[User runs command] --> B{Command type?}
+    
+    B -->|cli.js browser| C{--ext flag?}
+    C -->|Yes| D[setupAdBlocking via page.route]
+    C -->|No| E[Skip ad blocking]
+    D --> F{--stealth flag?}
+    E --> F
+    F -->|Yes| G{rayobrowse running?}
+    F -->|No| H[browser.launch]
+    G -->|Yes| I[chromium.connectOverCDP]
+    G -->|No| H
+    I --> J[page.goto]
+    H --> J
+    J --> K{Is search command?}
+    K -->|Yes| L[page.fill + press Enter]
+    K -->|No| M[Execute user action]
+    L --> N[Wait for results]
+    N --> O[page.evaluate extractScript]
+    M --> P[page.screenshot / return data]
+    O --> P
+    D --> Q[Filter requests]
+    Q --> R{Domain blocked?}
+    R -->|Yes| S[route.abort]
+    R -->|No| T[route.continue]
+    P --> U[Dismiss cookie banners]
+    U --> V[Return results]
+
+    B -->|node browser.js| W[launchBrowser via Puppeteer]
+    W --> X[page.goto networkidle2]
+    X --> Y{Command category?}
+    Y -->|Navigation| Z[open/text/fill/exec/download/cookies/headers/tabs]
+    Y -->|Screenshot| AA[screenshot/viewport/element/clip/compare/pdf/multi-shot]
+    Y -->|Mouse| AB[move/click/double-click/right-click/drag/hover/scroll/path/wiggle]
+    Z --> AC[return result]
+    AA --> AC
+    AB --> AC
 
     style A fill:#ff6b6b,color:white
-    style C fill:#2ecc71,color:white
-    style H fill:#e74c3c,color:white
-    style K fill:#3498db,color:white
-    style R fill:#e74c3c,color:white
-    style S fill:#27ae60,color:white
+    style D fill:#2ecc71,color:white
+    style I fill:#e74c3c,color:white
+    style L fill:#3498db,color:white
+    style S fill:#e74c3c,color:white
+    style T fill:#27ae60,color:white
+    style W fill:#45aaf2,color:white
+    style AB fill:#a29bfe,color:white
 ```
 
 ## Resources
@@ -505,11 +651,11 @@ flowchart TD
 | Resource | Description | License |
 |----------|-------------|---------|
 | [Microsoft Playwright](https://github.com/microsoft/playwright) | Cross-browser automation framework | Apache-2.0 |
+| [Puppeteer](https://github.com/puppeteer/puppeteer) | Chrome automation engine (browser.js) | Apache-2.0 |
 | [rayobyte-data/rayobrowse](https://github.com/rayobyte-data/rayobrowse) | Stealth Chromium Docker browser with 50+ fingerprint spoofing signals | MIT |
 | [uBlock Origin](https://github.com/gorhill/uBlock) | Ad/tracker domain list inspiration (EasyList, EasyPrivacy) | GPL-3.0 |
 | [No Cookie Banners](https://github.com/JeannedArk/no-cookie-banners-browser-extension) | Cookie banner selector patterns | MIT |
 | [bypass-login](https://wordpress.org/plugins/bypass-login/) | WordPress login bypass plugin (AJAX authentication) | GPL-2.0 |
-| [Puppeteer](https://github.com/puppeteer/puppeteer) | Legacy Chrome automation (kept for compatibility) | Apache-2.0 |
 | [Google APIs](https://github.com/googleapis/nodejs-googleapis) | Gmail and Calendar API client | Apache-2.0 |
 | [dotenv](https://github.com/motdotla/dotenv) | Environment variable loading from .env files | BSD-2-Clause |
 | [Express](https://github.com/expressjs/express) | OAuth callback server | MIT |
