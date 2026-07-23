@@ -226,7 +226,7 @@ function auth() {
 const [,, cmd, sub, ...rawArgs] = process.argv;
 
 const useExt = rawArgs.includes('--ext');
-const useStealth = rawArgs.includes('--stealth');
+const useStealth = !rawArgs.includes('--no-stealth');
 const filteredArgs = rawArgs.filter(a => a !== '--ext' && a !== '--stealth');
 
 const VALID_BROWSERS = ['chromium', 'firefox', 'webkit'];
@@ -291,7 +291,7 @@ Other:
 
 Flags:
   --ext                              Enable ad/tracker blocking + cookie dismissal
-  --stealth                          Use rayobrowse stealth browser (anti-bot evasion)
+  --no-stealth                       Disable rayobrowse stealth browser
 
 Append engine name to use Firefox/WebKit: ... chromium (default)
 `);

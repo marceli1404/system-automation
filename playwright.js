@@ -120,12 +120,17 @@ const COOKIE_BANNER_DISMISS_TEXTS = [
   'enable cookies',
 ];
 
-async function launchBrowser(browserType = 'chromium', headless = false, useExtensions = false, stealth = false) {
+async function launchBrowser(browserType = 'chromium', headless = false, useExtensions = false, stealth = true) {
   await ensureDir(SCREENSHOTS_DIR);
 
   if (stealth) {
-    const result = await launchStealthBrowser(headless);
-    return result.browser;
+    try {
+      const result = await launchStealthBrowser(headless);
+      console.log('[stealth] Connected to rayobrowse');
+      return result.browser;
+    } catch (e) {
+      console.log(`[stealth] rayobrowse unavailable (${e.message}), falling back to local browser`);
+    }
   }
 
   const browserMap = { chromium, firefox, webkit };
@@ -882,8 +887,8 @@ Advanced:
 
 (async () => {
   const useExtensions = args.includes('--ext');
-  const useStealth = args.includes('--stealth');
-  const filteredArgs = args.filter(a => a !== '--ext' && a !== '--stealth');
+  const useStealth = !args.includes('--no-stealth');
+  const filteredArgs = args.filter(a => a !== '--ext' && a !== '--stealth' && a !== '--no-stealth');
   
   if (useStealth && command === 'stealth-health') {
     const health = await checkStealthHealth();
