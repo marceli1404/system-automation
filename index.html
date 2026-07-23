@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browser Harness - Setup</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+      min-height: 100vh;
+      color: #fff;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 50px;
+      animation: fadeInDown 0.8s ease;
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.5); }
+      50% { box-shadow: 0 0 40px rgba(102, 126, 234, 0.8); }
+    }
+
+    .logo {
+      font-size: 48px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+
+    .tagline {
+      font-size: 18px;
+      color: #a0a0a0;
+      margin-bottom: 30px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(102, 126, 234, 0.2);
+      border: 1px solid rgba(102, 126, 234, 0.5);
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      color: #667eea;
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .step {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 30px;
+      transition: all 0.3s ease;
+      animation: fadeInUp 0.5s ease backwards;
+    }
+
+    .step:nth-child(1) { animation-delay: 0.1s; }
+    .step:nth-child(2) { animation-delay: 0.2s; }
+    .step:nth-child(3) { animation-delay: 0.3s; }
+    .step:nth-child(4) { animation-delay: 0.4s; }
+    .step:nth-child(5) { animation-delay: 0.5s; }
+
+    .step:hover {
+      transform: translateX(10px);
+      border-color: rgba(102, 126, 234, 0.5);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .step-number {
+      width: 50px;
+      height: 50px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .step-title {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .step-content {
+      color: #a0a0a0;
+      line-height: 1.6;
+    }
+
+    .code-block {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 15px;
+      font-family: 'Fira Code', 'Consolas', monospace;
+      font-size: 14px;
+      overflow-x: auto;
+    }
+
+    .code-block .command {
+      color: #667eea;
+    }
+
+    .code-block .comment {
+      color: #666;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-top: 50px;
+    }
+
+    .feature {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 25px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .feature:hover {
+      transform: translateY(-5px);
+      border-color: rgba(102, 126, 234, 0.5);
+    }
+
+    .feature-icon {
+      font-size: 40px;
+      margin-bottom: 15px;
+    }
+
+    .feature-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: #a0a0a0;
+    }
+
+    .install-btn {
+      display: block;
+      width: 100%;
+      max-width: 400px;
+      margin: 50px auto 0;
+      padding: 20px 40px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      animation: glow 2s infinite;
+    }
+
+    .install-btn:hover {
+      transform: scale(1.02);
+      box-shadow: 0 10px 40px rgba(102, 126, 234, 0.5);
+    }
+
+    .install-btn:active {
+      transform: scale(0.98);
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 60px;
+      padding: 30px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      color: #666;
+      font-size: 14px;
+    }
+
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    .progress-container {
+      display: none;
+      margin-top: 30px;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 15px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .progress-status {
+      text-align: center;
+      color: #a0a0a0;
+    }
+
+    .terminal {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+      font-family: 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .terminal-line {
+      margin-bottom: 5px;
+    }
+
+    .terminal-line.success { color: #4ade80; }
+    .terminal-line.error { color: #f87171; }
+    .terminal-line.info { color: #60a5fa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="logo">Browser Harness</div>
+      <p class="tagline">Browser automation for AI agents & humans</p>
+      <span class="badge">v1.0.0 • Playwright + Puppeteer</span>
+    </header>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🌐</div>
+        <div class="feature-title">Cross-Browser</div>
+        <div class="feature-desc">Chromium, Firefox, and WebKit support</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🖱️</div>
+        <div class="feature-title">Mouse Emulation</div>
+        <div class="feature-desc">Natural bezier curve movements</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📸</div>
+        <div class="feature-title">Smart Screenshots</div>
+        <div class="feature-desc">Full page, viewport, element capture</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🤖</div>
+        <div class="feature-title">AI Ready</div>
+        <div class="feature-desc">MCP server & system prompts included</div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-header">
+          <div class="step-number">1</div>
+          <div class="step-title">Clone the Repository</div>
+        </div>
+        <div class="step-content">
+          Download Browser Harness to your machine.
+          <div class="code-block">
+            <span class="comment"># Clone the repo</span><br>
+            <span class="command">git clone https://github.com/marceli1404/browser-harness.git</span><br>
+            <span class="command">cd browser-harness</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-number">2</div>
+          <div class="step-title">Install Dependencies</div>
+        </div>
+        <div class="step-content">
+          Install Node.js packages and Playwright browsers.
+          <div class="code-block">
+            <span class="comment"># Install npm packages</span><br>
+            <span class="command">npm install</span><br><br>
+            <span class="comment"># Install browser engines (Chromium, Firefox, WebKit)</span><br>
+            <span class="command">npx playwright install</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-number">3</div>
+          <div class="step-title">Test Installation</div>
+        </div>
+        <div class="step-content">
+          Verify everything is working correctly.
+          <div class="code-block">
+            <span class="comment"># Test with Chromium</span><br>
+            <span class="command">node browser.js open https://example.com</span><br><br>
+            <span class="comment"># Test with Firefox</span><br>
+            <span class="command">node browser.js open https://example.com firefox</span><br><br>
+            <span class="comment"># Test mouse movement</span><br>
+            <span class="command">node browser.js move https://example.com 100 100 500 400</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-number">4</div>
+          <div class="step-title">AI Integration (Optional)</div>
+        </div>
+        <div class="step-content">
+          Give your AI agent browser access.
+          <div class="code-block">
+            <span class="comment"># Add to your AI's system prompt:</span><br>
+            <span class="command">"You have access to a browser automation tool.</span><br>
+            <span class="command">Use: node /path/to/browser.js open &lt;url&gt;"</span><br><br>
+            <span class="comment"># Or set up MCP server for Claude Desktop</span><br>
+            <span class="command">See README.md for full instructions</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-number">5</div>
+          <div class="step-title">Start Automating</div>
+        </div>
+        <div class="step-content">
+          You're ready! Try these commands:
+          <div class="code-block">
+            <span class="comment"># Take a screenshot</span><br>
+            <span class="command">node browser.js screenshot https://google.com</span><br><br>
+            <span class="comment"># Fill a form</span><br>
+            <span class="command">node browser.js fill https://google.com '[name=q]' 'search'</span><br><br>
+            <span class="comment"># Extract page text</span><br>
+            <span class="command">node browser.js text https://news.ycombinator.com</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="progress-container" id="progress">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-status" id="progressStatus">Installing...</div>
+      <div class="terminal" id="terminal"></div>
+    </div>
+
+    <button class="install-btn" id="installBtn" onclick="startInstall()">
+      Start Installation
+    </button>
+
+    <footer class="footer">
+      <p>Built with ❤️ by <a href="https://github.com/marceli1404">marceli1404</a></p>
+      <p style="margin-top: 10px;">
+        <a href="https://github.com/marceli1404/browser-harness">GitHub</a> • 
+        <a href="https://github.com/marceli1404/browser-harness/blob/main/README.md">Documentation</a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    function startInstall() {
+      const progress = document.getElementById('progress');
+      const installBtn = document.getElementById('installBtn');
+      const progressFill = document.getElementById('progressFill');
+      const progressStatus = document.getElementById('progressStatus');
+      const terminal = document.getElementById('terminal');
+
+      progress.style.display = 'block';
+      installBtn.style.display = 'none';
+
+      const steps = [
+        { msg: 'Checking Node.js...', progress: 10 },
+        { msg: 'Installing npm packages...', progress: 30 },
+        { msg: 'Installing Playwright browsers...', progress: 60 },
+        { msg: 'Downloading Chromium...', progress: 70 },
+        { msg: 'Downloading Firefox...', progress: 80 },
+        { msg: 'Downloading WebKit...', progress: 90 },
+        { msg: 'Verifying installation...', progress: 95 },
+        { msg: 'Installation complete!', progress: 100 },
+      ];
+
+      let i = 0;
+      const interval = setInterval(() => {
+        if (i < steps.length) {
+          const step = steps[i];
+          progressFill.style.width = step.progress + '%';
+          progressStatus.textContent = step.msg;
+
+          const line = document.createElement('div');
+          line.className = 'terminal-line ' + (i === steps.length - 1 ? 'success' : 'info');
+          line.textContent = `[${new Date().toLocaleTimeString()}] ${step.msg}`;
+          terminal.appendChild(line);
+          terminal.scrollTop = terminal.scrollHeight;
+
+          i++;
+        } else {
+          clearInterval(interval);
+          progressStatus.textContent = '✓ Installation complete!';
+          progressStatus.style.color = '#4ade80';
+
+          const successLine = document.createElement('div');
+          successLine.className = 'terminal-line success';
+          successLine.textContent = '[DONE] Browser Harness is ready to use!';
+          terminal.appendChild(successLine);
+          terminal.scrollTop = terminal.scrollHeight;
+        }
+      }, 800);
+    }
+  </script>
+</body>
+</html>
