@@ -316,6 +316,38 @@ node cli.js browser open https://example.com --ext --stealth  # Both
 | `browser a11y <url>` | Accessibility tree |
 | `browser intercept <url> image,css` | Block resources |
 
+### WordPress Login Bypass
+
+Bypass WordPress login pages using AJAX (requires [bypass-login](https://wordpress.org/plugins/bypass-login/) plugin) or form-based credentials.
+
+| Command | Description |
+|---------|-------------|
+| `browser wp-login <url> --user-id=1` | Login as user ID (AJAX bypass) |
+| `browser wp-login <url> --username=admin --password=pass` | Login with credentials (form fallback) |
+| `browser wp-users <url>` | List available users on login page |
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI as CLI (wp-login)
+    participant PW as Playwright
+    participant WP as WordPress Site
+    participant AJAX as admin-ajax.php
+
+    User->>CLI: wp-login https://site.com/wp-login.php --user-id=1
+    CLI->>PW: Launch browser + navigate to login page
+    PW->>WP: GET /wp-login.php
+    WP-->>PW: Login page HTML
+    CLI->>CLI: Detect WP login page (#loginform, #user_login)
+    CLI->>AJAX: POST action=bypass_login&user_id=1
+    AJAX->>WP: wp_set_auth_cookie(1, true)
+    AJAX-->>CLI: "1" (success)
+    CLI->>PW: Navigate to /wp-admin/
+    PW->>WP: GET /wp-admin/ (with auth cookie)
+    WP-->>PW: Admin dashboard
+    CLI->>User: Login successful, cookies saved
+```
+
 ## Gmail Commands
 
 | Command | Description |
