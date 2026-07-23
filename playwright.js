@@ -8,11 +8,174 @@ async function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-async function launchBrowser(browserType = 'chromium', headless = false) {
+const AD_BLOCK_DOMAINS = [
+  'doubleclick.net',
+  'googlesyndication.com',
+  'googleadservices.com',
+  'google-analytics.com',
+  'pagead2.googlesyndication.com',
+  'adservice.google.com',
+  'facebook.com/tr',
+  'analytics.twitter.com',
+  'static.ads-twitter.com',
+  'ads.linkedin.com',
+  'bat.bing.com',
+  'amazon-adsystem.com',
+  'adnxs.com',
+  'adsrvr.org',
+  'demdex.net',
+  'everesttech.net',
+  'rubiconproject.com',
+  'pubmatic.com',
+  'openx.net',
+  'criteo.com',
+  'criteo.net',
+  'taboola.com',
+  'outbrain.com',
+  'moatads.com',
+  'scorecardresearch.com',
+  'quantserve.com',
+  'bluekai.com',
+  'bidswitch.net',
+  'casalemedia.com',
+  'contextweb.com',
+  'sharethrough.com',
+  'spotxchange.com',
+  'teads.tv',
+  'lijit.com',
+  'sail-horizon.com',
+  'hotjar.com',
+  'mouseflow.com',
+  'crazyegg.com',
+  'fullstory.com',
+  'clarity.ms',
+  'sentry.io',
+  'optimizely.com',
+  'newrelic.com',
+  'nr-data.net',
+  'chartbeat.com',
+  'chartbeat.net',
+  'parsely.com',
+  'permutive.com',
+  'bounceexchange.com',
+  'cdn-gl.imrworldwide.com',
+  'imrworldwide.com',
+];
+
+const COOKIE_BANNER_SELECTORS = [
+  '[class*="cookie-consent"]',
+  '[class*="cookie-banner"]',
+  '[class*="cookie-notice"]',
+  '[class*="cookie-popup"]',
+  '[class*="cookie-modal"]',
+  '[id*="cookie-consent"]',
+  '[id*="cookie-banner"]',
+  '[id*="cookie-notice"]',
+  '[id*="cookie-popup"]',
+  '[id*="cookie-modal"]',
+  '[class*="consent-banner"]',
+  '[class*="consent-popup"]',
+  '[class*="consent-modal"]',
+  '[id*="consent-banner"]',
+  '[id*="consent-popup"]',
+  '[id*="consent-modal"]',
+  '[class*="cc-banner"]',
+  '[id*="CybotCookiebotDialog"]',
+  '[class*="onetrust"]',
+  '[id*="onetrust"]',
+  '[class*="osano"]',
+  '[id*="osano"]',
+  '[class*="iubenda"]',
+  '[id*="iubenda"]',
+  '[class*="gdpr"]',
+  '[id*="gdpr"]',
+  '[aria-label*="cookie" i]',
+  '[aria-label*="consent" i]',
+  '[data-testid*="cookie" i]',
+  '[data-testid*="consent" i]',
+];
+
+const COOKIE_BANNER_DISMISS_TEXTS = [
+  'accept all',
+  'accept cookies',
+  'accept',
+  'agree',
+  'got it',
+  'ok',
+  'okay',
+  'allow all',
+  'allow cookies',
+  'allow',
+  'i agree',
+  'i accept',
+  'close',
+  'dismiss',
+  'continue',
+  'understood',
+  'fine',
+  'yes',
+  'i understand',
+  'enable all',
+  'enable cookies',
+];
+
+async function launchBrowser(browserType = 'chromium', headless = false, useExtensions = false) {
   await ensureDir(SCREENSHOTS_DIR);
   const browserMap = { chromium, firefox, webkit };
-  const browser = await browserMap[browserType].launch({ headless });
+
+  const launchOptions = { headless };
+  const browser = await browserMap[browserType].launch(launchOptions);
   return browser;
+}
+
+async function setupAdBlocking(page) {
+  await page.route('**/*', (route) => {
+    const url = route.request().url();
+    const resourceType = route.request().resourceType();
+    const isAd = AD_BLOCK_DOMAINS.some(d => url.includes(d));
+    const isAdScript = resourceType === 'script' && /ad[s]/.test(url);
+    if (isAd || isAdScript) {
+      route.abort();
+    } else {
+      route.continue();
+    }
+  });
+}
+
+async function dismissCookieBanners(page) {
+  await page.evaluate(({ selectors, texts }) => {
+    function dismiss() {
+      for (const sel of selectors) {
+        const els = document.querySelectorAll(sel);
+        for (const el of els) {
+          if (el.offsetParent !== null || getComputedStyle(el).display !== 'none') {
+            el.remove();
+          }
+        }
+      }
+      const buttons = document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]');
+      for (const btn of buttons) {
+        const text = (btn.textContent || btn.value || '').trim().toLowerCase();
+        if (texts.some(t => text === t || text.includes(t))) {
+          btn.click();
+          return true;
+        }
+      }
+      return false;
+    }
+    dismiss();
+    setTimeout(dismiss, 1000);
+    setTimeout(dismiss, 3000);
+  }, { selectors: COOKIE_BANNER_SELECTORS, texts: COOKIE_BANNER_DISMISS_TEXTS });
+}
+
+async function gotoPage(page, url, useExtensions) {
+  const waitUntil = useExtensions ? 'domcontentloaded' : 'networkidle';
+  await page.goto(url, { waitUntil, timeout: 30000 });
+  if (useExtensions) {
+    await dismissCookieBanners(page);
+    await new Promise(r => setTimeout(r, 1000));
+  }
 }
 
 function randomDelay(min = 5, max = 25) {
@@ -45,11 +208,12 @@ function generateBezierPath(startX, startY, endX, endY, steps = 20) {
 
 // ── Navigation ────────────────────────────────────────
 
-async function nav(url, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function nav(url, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const title = await page.title();
     console.log(`Title: ${title}`);
     console.log(`URL: ${page.url()}`);
@@ -59,11 +223,12 @@ async function nav(url, browserType = 'chromium') {
   }
 }
 
-async function getText(url, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function getText(url, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const text = await page.evaluate(() => document.body.innerText);
     console.log(text);
     return text;
@@ -72,11 +237,12 @@ async function getText(url, browserType = 'chromium') {
   }
 }
 
-async function fillAndSubmit(url, selector, value, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function fillAndSubmit(url, selector, value, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     await page.fill(selector, value);
     await page.keyboard.press('Enter');
     await page.waitForTimeout(2000);
@@ -92,11 +258,12 @@ async function fillAndSubmit(url, selector, value, browserType = 'chromium') {
   }
 }
 
-async function execScript(url, script, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function execScript(url, script, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const result = await page.evaluate(script);
     console.log(JSON.stringify(result, null, 2));
     return result;
@@ -105,11 +272,12 @@ async function execScript(url, script, browserType = 'chromium') {
   }
 }
 
-async function downloadPage(url, output, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function downloadPage(url, output, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const html = await page.content();
     const name = output || `page-${Date.now()}.html`;
     const outPath = path.join(__dirname, name);
@@ -121,11 +289,12 @@ async function downloadPage(url, output, browserType = 'chromium') {
   }
 }
 
-async function cookies(url, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function cookies(url, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const cookies = await page.context().cookies();
     console.log(JSON.stringify(cookies, null, 2));
     return cookies;
@@ -134,11 +303,12 @@ async function cookies(url, browserType = 'chromium') {
   }
 }
 
-async function headers(url, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function headers(url, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const title = await page.title();
     const meta = await page.evaluate(() => {
       const metas = document.querySelectorAll('meta');
@@ -156,13 +326,14 @@ async function headers(url, browserType = 'chromium') {
   }
 }
 
-async function multiTab(urls, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function multiTab(urls, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const context = await browser.newContext();
     for (const url of urls) {
       const page = await context.newPage();
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+      if (useExtensions) await setupAdBlocking(page);
+      await gotoPage(page, url, useExtensions);
       console.log(`${url} -> ${await page.title()}`);
     }
     const pages = context.pages();
@@ -178,11 +349,12 @@ async function multiTab(urls, browserType = 'chromium') {
 
 // ── Screenshots ───────────────────────────────────────
 
-async function screenshotFullPage(url, filename, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function screenshotFullPage(url, filename, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const name = filename || `fullpage-${Date.now()}.png`;
     const outPath = path.join(SCREENSHOTS_DIR, name);
     await page.screenshot({ path: outPath, fullPage: true });
@@ -193,13 +365,14 @@ async function screenshotFullPage(url, filename, browserType = 'chromium') {
   }
 }
 
-async function screenshotViewport(url, filename, options = {}, browserType = 'chromium') {
+async function screenshotViewport(url, filename, options = {}, browserType = 'chromium', useExtensions = false) {
   const { width = 1920, height = 1080 } = options;
-  const browser = await launchBrowser(browserType);
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const context = await browser.newContext({ viewport: { width, height } });
     const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const name = filename || `viewport-${Date.now()}.png`;
     const outPath = path.join(SCREENSHOTS_DIR, name);
     await page.screenshot({ path: outPath, fullPage: false });
@@ -210,11 +383,12 @@ async function screenshotViewport(url, filename, options = {}, browserType = 'ch
   }
 }
 
-async function screenshotElement(url, filename, selector, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function screenshotElement(url, filename, selector, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     await page.waitForSelector(selector);
     const element = await page.$(selector);
     const name = filename || `element-${Date.now()}.png`;
@@ -227,11 +401,12 @@ async function screenshotElement(url, filename, selector, browserType = 'chromiu
   }
 }
 
-async function screenshotClip(url, filename, clip, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function screenshotClip(url, filename, clip, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const name = filename || `clip-${Date.now()}.png`;
     const outPath = path.join(SCREENSHOTS_DIR, name);
     await page.screenshot({ path: outPath, clip });
@@ -242,11 +417,12 @@ async function screenshotClip(url, filename, clip, browserType = 'chromium') {
   }
 }
 
-async function screenshotPdf(url, filename, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType, true);
+async function screenshotPdf(url, filename, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, true, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const name = filename || `page-${Date.now()}.pdf`;
     const outPath = path.join(SCREENSHOTS_DIR, name);
     await page.pdf({ path: outPath, format: 'A4', printBackground: true });
@@ -257,11 +433,12 @@ async function screenshotPdf(url, filename, browserType = 'chromium') {
   }
 }
 
-async function screenshotMultiple(url, count = 3, interval = 1000, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function screenshotMultiple(url, count = 3, interval = 1000, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const screenshots = [];
     for (let i = 0; i < count; i++) {
       const name = `multi-${Date.now()}-${i}.png`;
@@ -277,18 +454,20 @@ async function screenshotMultiple(url, count = 3, interval = 1000, browserType =
   }
 }
 
-async function screenshotCompare(url1, url2, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function screenshotCompare(url1, url2, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page1 = await browser.newPage();
-    await page1.goto(url1, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page1);
+    await gotoPage(page1, url1, useExtensions);
     const name1 = `compare-a-${Date.now()}.png`;
     const outPath1 = path.join(SCREENSHOTS_DIR, name1);
     await page1.screenshot({ path: outPath1, fullPage: true });
     console.log(`Screenshot A: ${outPath1}`);
 
     const page2 = await browser.newPage();
-    await page2.goto(url2, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page2);
+    await gotoPage(page2, url2, useExtensions);
     const name2 = `compare-b-${Date.now()}.png`;
     const outPath2 = path.join(SCREENSHOTS_DIR, name2);
     await page2.screenshot({ path: outPath2, fullPage: true });
@@ -302,12 +481,13 @@ async function screenshotCompare(url1, url2, browserType = 'chromium') {
 
 // ── Mouse Emulation ───────────────────────────────────
 
-async function mouseMove(url, startX, startY, endX, endY, options = {}, browserType = 'chromium') {
+async function mouseMove(url, startX, startY, endX, endY, options = {}, browserType = 'chromium', useExtensions = false) {
   const { steps = 20, delay = 10 } = options;
-  const browser = await launchBrowser(browserType);
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     
     const movePath = generateBezierPath(startX, startY, endX, endY, steps);
     await page.mouse.move(startX, startY);
@@ -325,12 +505,13 @@ async function mouseMove(url, startX, startY, endX, endY, options = {}, browserT
   }
 }
 
-async function mouseClick(url, x, y, options = {}, browserType = 'chromium') {
+async function mouseClick(url, x, y, options = {}, browserType = 'chromium', useExtensions = false) {
   const { button = 'left', clickCount = 1 } = options;
-  const browser = await launchBrowser(browserType);
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     
     await page.mouse.move(x, y, { steps: 10 });
     await page.waitForTimeout(100);
@@ -349,20 +530,21 @@ async function mouseClick(url, x, y, options = {}, browserType = 'chromium') {
   }
 }
 
-async function mouseDoubleClick(url, x, y, browserType = 'chromium') {
-  return mouseClick(url, x, y, { clickCount: 2 }, browserType);
+async function mouseDoubleClick(url, x, y, browserType = 'chromium', useExtensions = false) {
+  return mouseClick(url, x, y, { clickCount: 2 }, browserType, useExtensions);
 }
 
-async function mouseRightClick(url, x, y, browserType = 'chromium') {
-  return mouseClick(url, x, y, { button: 'right' }, browserType);
+async function mouseRightClick(url, x, y, browserType = 'chromium', useExtensions = false) {
+  return mouseClick(url, x, y, { button: 'right' }, browserType, useExtensions);
 }
 
-async function mouseDrag(url, startX, startY, endX, endY, options = {}, browserType = 'chromium') {
+async function mouseDrag(url, startX, startY, endX, endY, options = {}, browserType = 'chromium', useExtensions = false) {
   const { steps = 30, delay = 10 } = options;
-  const browser = await launchBrowser(browserType);
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     
     await page.mouse.move(startX, startY, { steps: 5 });
     await page.waitForTimeout(100);
@@ -390,12 +572,13 @@ async function mouseDrag(url, startX, startY, endX, endY, options = {}, browserT
   }
 }
 
-async function mouseHover(url, x, y, options = {}, browserType = 'chromium') {
+async function mouseHover(url, x, y, options = {}, browserType = 'chromium', useExtensions = false) {
   const { duration = 1000 } = options;
-  const browser = await launchBrowser(browserType);
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     
     await page.mouse.move(x, y, { steps: 15 });
     console.log(`Hovering at (${x}, ${y}) for ${duration}ms`);
@@ -407,11 +590,12 @@ async function mouseHover(url, x, y, options = {}, browserType = 'chromium') {
   }
 }
 
-async function mouseScroll(url, x, y, scrollX, scrollY, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function mouseScroll(url, x, y, scrollX, scrollY, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     
     await page.mouse.move(x, y);
     await page.mouse.wheel(scrollX, scrollY);
@@ -429,12 +613,13 @@ async function mouseScroll(url, x, y, scrollX, scrollY, browserType = 'chromium'
   }
 }
 
-async function mousePath(url, points, options = {}, browserType = 'chromium') {
+async function mousePath(url, points, options = {}, browserType = 'chromium', useExtensions = false) {
   const { delay = 15 } = options;
-  const browser = await launchBrowser(browserType);
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     
     for (let i = 0; i < points.length - 1; i++) {
       const from = points[i];
@@ -454,12 +639,13 @@ async function mousePath(url, points, options = {}, browserType = 'chromium') {
   }
 }
 
-async function mouseWiggle(url, x, y, options = {}, browserType = 'chromium') {
+async function mouseWiggle(url, x, y, options = {}, browserType = 'chromium', useExtensions = false) {
   const { radius = 20, duration = 2000 } = options;
-  const browser = await launchBrowser(browserType);
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     
     const steps = Math.floor(duration / 30);
     for (let i = 0; i < steps; i++) {
@@ -480,11 +666,12 @@ async function mouseWiggle(url, x, y, options = {}, browserType = 'chromium') {
 
 // ── Accessibility Tree (Playwright Special) ───────────
 
-async function getAccessibilityTree(url, browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function getAccessibilityTree(url, browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    if (useExtensions) await setupAdBlocking(page);
+    await gotoPage(page, url, useExtensions);
     const snapshot = await page.accessibility.snapshot();
     console.log(JSON.stringify(snapshot, null, 2));
     return snapshot;
@@ -495,8 +682,8 @@ async function getAccessibilityTree(url, browserType = 'chromium') {
 
 // ── Network Interception ──────────────────────────────
 
-async function interceptRequests(url, resourceTypes = ['image'], browserType = 'chromium') {
-  const browser = await launchBrowser(browserType);
+async function interceptRequests(url, resourceTypes = ['image'], browserType = 'chromium', useExtensions = false) {
+  const browser = await launchBrowser(browserType, false, useExtensions);
   try {
     const page = await browser.newPage();
     const intercepted = [];
@@ -510,7 +697,7 @@ async function interceptRequests(url, resourceTypes = ['image'], browserType = '
       }
     });
     
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    await gotoPage(page, url, useExtensions);
     console.log(`Intercepted ${intercepted.length} requests:`);
     intercepted.forEach(u => console.log(`  ${u}`));
     return intercepted;
@@ -521,13 +708,14 @@ async function interceptRequests(url, resourceTypes = ['image'], browserType = '
 
 // ── Multi-Browser Comparison ──────────────────────────
 
-async function crossBrowserTest(url, browsers = ['chromium', 'firefox', 'webkit']) {
+async function crossBrowserTest(url, browsers = ['chromium', 'firefox', 'webkit'], useExtensions = false) {
   const results = {};
   for (const browserType of browsers) {
-    const browser = await launchBrowser(browserType, true);
+    const browser = await launchBrowser(browserType, true, useExtensions);
     try {
       const page = await browser.newPage();
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+      if (useExtensions) await setupAdBlocking(page);
+      await gotoPage(page, url, useExtensions);
       const title = await page.title();
       const name = `cross-${browserType}-${Date.now()}.png`;
       const outPath = path.join(SCREENSHOTS_DIR, name);
@@ -576,7 +764,9 @@ const [,, command, ...args] = process.argv;
 
 function usage() {
   console.log(`
-Usage: node playwright.js <command> [args]
+Usage: node playwright.js <command> [args] [--ext]
+
+  --ext    Enable built-in ad blocking + cookie banner dismissal (via route interception)
 
 Navigation:
   open <url> [browser]             Navigate (chromium/firefox/webkit)
@@ -616,99 +806,102 @@ Advanced:
 }
 
 (async () => {
-  const browserType = args[args.length - 1];
+  const useExtensions = args.includes('--ext');
+  const filteredArgs = args.filter(a => a !== '--ext');
+  
+  const browserType = filteredArgs[filteredArgs.length - 1];
   const validBrowsers = ['chromium', 'firefox', 'webkit'];
   const browser = validBrowsers.includes(browserType) ? browserType : 'chromium';
-  const cmdArgs = validBrowsers.includes(browserType) ? args.slice(0, -1) : args;
+  const cmdArgs = validBrowsers.includes(browserType) ? filteredArgs.slice(0, -1) : filteredArgs;
 
   try {
     switch (command) {
       case 'open':
-        await nav(cmdArgs[0], browser);
+        await nav(cmdArgs[0], browser, useExtensions);
         break;
       case 'text':
-        await getText(cmdArgs[0], browser);
+        await getText(cmdArgs[0], browser, useExtensions);
         break;
       case 'fill':
-        await fillAndSubmit(cmdArgs[0], cmdArgs[1], cmdArgs.slice(2).join(' '), browser);
+        await fillAndSubmit(cmdArgs[0], cmdArgs[1], cmdArgs.slice(2).join(' '), browser, useExtensions);
         break;
       case 'exec':
-        await execScript(cmdArgs[0], cmdArgs.slice(1).join(' '), browser);
+        await execScript(cmdArgs[0], cmdArgs.slice(1).join(' '), browser, useExtensions);
         break;
       case 'download':
-        await downloadPage(cmdArgs[0], cmdArgs[1], browser);
+        await downloadPage(cmdArgs[0], cmdArgs[1], browser, useExtensions);
         break;
       case 'cookies':
-        await cookies(cmdArgs[0], browser);
+        await cookies(cmdArgs[0], browser, useExtensions);
         break;
       case 'headers':
-        await headers(cmdArgs[0], browser);
+        await headers(cmdArgs[0], browser, useExtensions);
         break;
       case 'tabs':
-        await multiTab(cmdArgs, browser);
+        await multiTab(cmdArgs, browser, useExtensions);
         break;
       case 'screenshot':
-        await screenshotFullPage(cmdArgs[0], cmdArgs[1], browser);
+        await screenshotFullPage(cmdArgs[0], cmdArgs[1], browser, useExtensions);
         break;
       case 'viewport':
         const [vw, vh] = (cmdArgs[2] || '1920x1080').split('x').map(Number);
-        await screenshotViewport(cmdArgs[0], cmdArgs[1], { width: vw, height: vh }, browser);
+        await screenshotViewport(cmdArgs[0], cmdArgs[1], { width: vw, height: vh }, browser, useExtensions);
         break;
       case 'element':
-        await screenshotElement(cmdArgs[0], cmdArgs[1], cmdArgs[2], browser);
+        await screenshotElement(cmdArgs[0], cmdArgs[1], cmdArgs[2], browser, useExtensions);
         break;
       case 'clip':
         const clip = JSON.parse(cmdArgs[2] || '{}');
-        await screenshotClip(cmdArgs[0], cmdArgs[1], clip, browser);
+        await screenshotClip(cmdArgs[0], cmdArgs[1], clip, browser, useExtensions);
         break;
       case 'compare':
-        await screenshotCompare(cmdArgs[0], cmdArgs[1], browser);
+        await screenshotCompare(cmdArgs[0], cmdArgs[1], browser, useExtensions);
         break;
       case 'pdf':
-        await screenshotPdf(cmdArgs[0], cmdArgs[1], browser);
+        await screenshotPdf(cmdArgs[0], cmdArgs[1], browser, useExtensions);
         break;
       case 'multi-shot':
-        await screenshotMultiple(cmdArgs[0], parseInt(cmdArgs[1]) || 3, parseInt(cmdArgs[2]) || 1000, browser);
+        await screenshotMultiple(cmdArgs[0], parseInt(cmdArgs[1]) || 3, parseInt(cmdArgs[2]) || 1000, browser, useExtensions);
         break;
       case 'cross-browser':
         await crossBrowserTest(cmdArgs[0]);
         break;
       case 'move':
-        await mouseMove(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), { steps: parseInt(cmdArgs[5]) || 20 }, browser);
+        await mouseMove(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), { steps: parseInt(cmdArgs[5]) || 20 }, browser, useExtensions);
         break;
       case 'click':
-        await mouseClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { button: cmdArgs[3] || 'left' }, browser);
+        await mouseClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { button: cmdArgs[3] || 'left' }, browser, useExtensions);
         break;
       case 'double-click':
-        await mouseDoubleClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browser);
+        await mouseDoubleClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browser, useExtensions);
         break;
       case 'right-click':
-        await mouseRightClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browser);
+        await mouseRightClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browser, useExtensions);
         break;
       case 'drag':
-        await mouseDrag(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), {}, browser);
+        await mouseDrag(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), {}, browser, useExtensions);
         break;
       case 'hover':
-        await mouseHover(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { duration: parseInt(cmdArgs[3]) || 1000 }, browser);
+        await mouseHover(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { duration: parseInt(cmdArgs[3]) || 1000 }, browser, useExtensions);
         break;
       case 'scroll':
-        await mouseScroll(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]) || 0, parseInt(cmdArgs[4]) || 100, browser);
+        await mouseScroll(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]) || 0, parseInt(cmdArgs[4]) || 100, browser, useExtensions);
         break;
       case 'path':
         const points = cmdArgs.slice(1).map(a => {
           const [x, y] = a.split(',').map(Number);
           return { x, y };
         });
-        await mousePath(cmdArgs[0], points, {}, browser);
+        await mousePath(cmdArgs[0], points, {}, browser, useExtensions);
         break;
       case 'wiggle':
-        await mouseWiggle(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { radius: parseInt(cmdArgs[3]) || 20, duration: parseInt(cmdArgs[4]) || 2000 }, browser);
+        await mouseWiggle(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { radius: parseInt(cmdArgs[3]) || 20, duration: parseInt(cmdArgs[4]) || 2000 }, browser, useExtensions);
         break;
       case 'a11y':
-        await getAccessibilityTree(cmdArgs[0], browser);
+        await getAccessibilityTree(cmdArgs[0], browser, useExtensions);
         break;
       case 'intercept':
-        await interceptRequests(cmdArgs[0], cmdArgs[1] ? cmdArgs[1].split(',') : ['image'], browser);
+        await interceptRequests(cmdArgs[0], cmdArgs[1] ? cmdArgs[1].split(',') : ['image'], browser, useExtensions);
         break;
       default:
         usage();
