@@ -1,4 +1,17 @@
 {
+  "name": "system-automation",
+  "version": "1.0.0",
+  "description": "Gmail, Calendar, and browser automation CLI",
+  "bin": {
+    "automation": "./cli.js"
+  },
+  "scripts": {
+    "start": "node cli.js",
+    "gmail": "node cli.js gmail",
+    "calendar": "node cli.js calendar",
+    "unsubscribe": "node cli.js unsubscribe",
+    "auth": "node cli.js auth"
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
