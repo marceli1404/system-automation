@@ -1,6 +1,6 @@
 # System Automation
 
-Gmail, Calendar, and Playwright browser automation CLI with cross-browser support (Chromium, Firefox, WebKit), built-in ad/tracker blocking, and automatic cookie banner dismissal.
+Gmail, Calendar, and Playwright browser automation CLI with cross-browser support (Chromium, Firefox, WebKit), built-in ad/tracker blocking, automatic cookie banner dismissal, and stealth browser integration via [rayobrowse](https://github.com/rayobyte-data/rayobrowse).
 
 ## Quick Start
 
@@ -11,6 +11,7 @@ node cli.js auth                # Authenticate with Google
 node cli.js gmail list          # View emails
 node cli.js browser open https://example.com
 node cli.js browser screenshot https://example.com page.png --ext  # With ad blocking
+node cli.js browser screenshot https://example.com page.png --stealth  # With stealth browser
 ```
 
 ## Feature Tree
@@ -169,6 +170,87 @@ CNN.com with and without `--ext`:
 | Ad/tracker requests | 13 | 0 | **100%** |
 | Total requests | 184 | 174 | 5% |
 
+## Stealth Browser Mode (`--stealth`)
+
+The `--stealth` flag connects to [rayobrowse](https://github.com/rayobyte-data/rayobrowse) — a Docker-based stealth Chromium browser that passes anti-bot detection (Cloudflare, Akamai, PerimeterX, BrowserScan, PixelScan).
+
+### Setup
+
+```bash
+# Clone and start rayobrowse
+git clone https://github.com/rayobyte-data/rayobrowse.git
+cd rayobrowse
+docker compose up -d
+
+# Verify it's running
+curl http://localhost:9222/health
+```
+
+### Usage
+
+```bash
+node playwright.js screenshot https://example.com page.png --stealth
+node playwright.js open https://example.com --stealth
+node playwright.js stealth-health  # Check daemon status
+```
+
+### How It Works
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI as CLI (--stealth)
+    participant Daemon as rayobrowse Daemon
+    participant Browser as Stealth Chromium
+    participant PW as Playwright CDP
+    participant Page as Web Page
+
+    User->>CLI: node playwright.js screenshot <url> --stealth
+    CLI->>Daemon: GET /connect?os=windows&headless=false&vnc=true
+    Daemon->>Browser: Launch stealth Chromium with fingerprint spoofing
+    Browser-->>Daemon: CDP WebSocket URL
+    Daemon-->>CLI: Return CDP URL + VNC URL
+    CLI->>PW: chromium.connectOverCDP(cdpUrl)
+    PW->>Page: Navigate & interact
+    Note right of Browser: 50+ spoofed signals:<br/>UA, WebGL, Canvas,<br/>fonts, timezone,<br/>audio, WebRTC
+    CLI->>PW: Screenshot result
+    PW-->>CLI: Disconnect (browser auto-cleaned)
+```
+
+### What rayobrowse Spoofs
+
+| Category | Signals |
+|----------|---------|
+| **Browser** | User agent, version, client hints, platform, plugins, MIME types |
+| **Graphics** | WebGL vendor/renderer/extensions, canvas output, text rendering |
+| **Audio** | AudioContext fingerprint, audio processing |
+| **Fonts** | OS-matched fonts, font rendering behavior |
+| **Network** | WebRTC, DNS leaks, proxy alignment, Accept-Language |
+| **Automation** | CDP artifacts, launch flags, headless/headful consistency |
+| **OS** | Timezone, locale, language, hardware concurrency, touch support |
+| **Mouse** | Human-like movement and click timing |
+
+### Supported Anti-Bot Systems
+
+| System | Status |
+|--------|--------|
+| Cloudflare | ✅ |
+| Akamai | ✅ |
+| PerimeterX / HUMAN | ✅ |
+| BrowserScan | ✅ |
+| PixelScan | ✅ |
+| demo.fingerprint.com | ✅ |
+
+### Combining Flags
+
+```bash
+# Stealth + ad blocking (best protection)
+node playwright.js screenshot https://example.com page.png --stealth --ext
+
+# Stealth + custom browser
+node playwright.js open https://example.com --stealth firefox
+```
+
 ## Browser Commands (Playwright)
 
 All browser commands support cross-browser testing. Append `chromium`, `firefox`, or `webkit` to any command:
@@ -179,11 +261,12 @@ node cli.js browser open https://example.com firefox    # Firefox
 node cli.js browser open https://example.com webkit     # Safari engine
 ```
 
-Add `--ext` to any command for ad blocking + cookie dismissal:
+Add `--ext` to any command for ad blocking + cookie dismissal, or `--stealth` for anti-bot evasion:
 
 ```bash
 node cli.js browser screenshot https://example.com page.png --ext
-node cli.js browser open https://example.com --ext
+node cli.js browser screenshot https://example.com page.png --stealth
+node cli.js browser open https://example.com --ext --stealth  # Both
 ```
 
 ### Navigation
@@ -326,6 +409,7 @@ flowchart TD
 
 ## Attribution
 
+- **Stealth Browser** — [rayobrowse](https://github.com/rayobyte-data/rayobrowse) (MIT) by Rayobyte. Stealth Chromium browser with 50+ spoofed fingerprint signals for anti-bot evasion.
 - **Ad/Tracker Domain List** — Inspired by [uBlock Origin](https://github.com/gorhill/uBlock) filter lists (GPL-3.0). Domain list curated from EasyList, EasyPrivacy, and uBlock Origin's built-in filters.
 - **Cookie Banner Selectors** — Inspired by [No Cookie Banners](https://github.com/JeannedArk/no-cookie-banners-browser-extension) (MIT). Selector patterns adapted from their content script.
 - **Mouse Emulation** — Bezier curve algorithm for natural mouse movement paths.

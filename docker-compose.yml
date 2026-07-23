@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  rayobrowse:
+    image: rayobyte/rayobrowse:latest
+    container_name: rayobrowse
+    restart: unless-stopped
+    ports:
+      - "9222:9222"   # CDP endpoint
+      - "6080:6080"   # noVNC web viewer
+    environment:
+      - MAX_SESSIONS=5
+      - MAX_LIFETIME=3600
+      - IGNORE_HTTPS_ERRORS=true
+    volumes:
+      - rayobrowse-data:/app
+    shm_size: "2g"
+
+volumes:
+  rayobrowse-data:
