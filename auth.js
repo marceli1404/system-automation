@@ -4,7 +4,7 @@ const express = require('express');
 const fs = require('fs');
 
 const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI } = process.env;
-const SCOPES = ['https://mail.google.com/'];
+const SCOPES = ['https://mail.google.com/', 'https://www.googleapis.com/auth/calendar'];
 const TOKEN_PATH = 'token.json';
 
 const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
