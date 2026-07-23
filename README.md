@@ -1,6 +1,6 @@
 # System Automation
 
-Gmail, Calendar, and Playwright browser automation CLI with cross-browser support (Chromium, Firefox, WebKit).
+Gmail, Calendar, and Playwright browser automation CLI with cross-browser support (Chromium, Firefox, WebKit), built-in ad/tracker blocking, and automatic cookie banner dismissal.
 
 ## Quick Start
 
@@ -10,6 +10,7 @@ npx playwright install          # Install browser engines
 node cli.js auth                # Authenticate with Google
 node cli.js gmail list          # View emails
 node cli.js browser open https://example.com
+node cli.js browser screenshot https://example.com page.png --ext  # With ad blocking
 ```
 
 ## Feature Tree
@@ -19,6 +20,7 @@ graph TD
     SA[System Automation CLI] --> GMAIL[Gmail]
     SA --> CAL[Calendar]
     SA --> BROWSER[Browser - Playwright]
+    SA --> PROTECT[Privacy & Protection]
     SA --> OTHER[Other]
 
     GMAIL --> G1[list - View emails]
@@ -67,6 +69,14 @@ graph TD
     ADV --> A1[a11y - Accessibility tree]
     ADV --> A2[intercept - Block resources]
 
+    PROTECT --> P1[--ext flag]
+    P1 --> P2[Ad/Tracker Blocking]
+    P1 --> P3[Cookie Banner Dismissal]
+    P2 --> P4[40+ tracker domains blocked]
+    P2 --> P5[Route-level interception]
+    P3 --> P6[Auto-remove consent elements]
+    P3 --> P7[Auto-click Accept buttons]
+
     OTHER --> O1[auth - Google OAuth]
     OTHER --> O2[unsubscribe - Mailing lists]
 
@@ -74,12 +84,90 @@ graph TD
     style GMAIL fill:#4ecdc4,stroke:#333,color:white
     style CAL fill:#9b59b6,stroke:#333,color:white
     style BROWSER fill:#feca57,stroke:#333,color:white
+    style PROTECT fill:#2ecc71,stroke:#333,color:white
     style NAV fill:#45b7d1,stroke:#333,color:white
     style SS fill:#96ceb4,stroke:#333,color:white
     style ME fill:#ff9ff3,stroke:#333,color:white
     style ADV fill:#c39bd3,stroke:#333,color:white
     style OTHER fill:#54a0ff,stroke:#333,color:white
+    style P1 fill:#27ae60,stroke:#333,color:white
+    style P2 fill:#1abc9c,stroke:#333,color:white
+    style P3 fill:#16a085,stroke:#333,color:white
 ```
+
+## Privacy & Ad Blocking (`--ext`)
+
+The `--ext` flag enables built-in ad/tracker blocking and cookie banner dismissal using Playwright's request interception — no external extensions required.
+
+### How It Works
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI as CLI (--ext)
+    participant PW as Playwright
+    participant Route as Route Interceptor
+    participant Page as Web Page
+    participant Dom as DOM Dismissal
+
+    User->>CLI: node playwright.js screenshot <url> --ext
+    CLI->>PW: Launch browser
+    CLI->>Route: Setup ad blocking rules (40+ domains)
+    CLI->>PW: page.goto(url, domcontentloaded)
+    PW->>Route: Intercept every request
+    Route-->>Route: Check domain against blocklist
+    alt Ad/Tracker domain
+        Route-->>Route: route.abort()
+        Note right of Route: doubleclick.net<br/>googlesyndication.com<br/>scorecardresearch.com<br/>...blocked
+    else Content
+        Route-->>PW: route.continue()
+        PW->>Page: Load resource
+    end
+    CLI->>Dom: dismissCookieBanners()
+    Dom->>Page: Remove consent overlays
+    Dom->>Page: Click "Accept" buttons
+    CLI->>PW: Screenshot result
+```
+
+### Blocked Domains (40+)
+
+Ad networks, trackers, and analytics services blocked via `page.route()`:
+
+| Category | Domains |
+|----------|---------|
+| **Ad Networks** | doubleclick.net, googlesyndication.com, googleadservices.com, pagead2.googlesyndication.com, adservice.google.com, adnxs.com, pubmatic.com, openx.net, sharethrough.com, teads.tv |
+| **Analytics** | google-analytics.com, scorecardresearch.com, quantserve.com, chartbeat.com, parsely.com, permutive.com |
+| **Tracking** | demdex.net, everesttech.net, rubiconproject.com, bluekai.com, bidswitch.net, casalemedia.com, criteo.com, criteo.net |
+| **Social** | facebook.com/tr, analytics.twitter.com, ads.twitter.com, ads.linkedin.com, bat.bing.com |
+| **Content Ads** | taboola.com, outbrain.com, moatads.com, amazon-adsystem.com |
+| **Session Replay** | hotjar.com, mouseflow.com, crazyegg.com, fullstory.com, clarity.ms |
+| **Error Tracking** | sentry.io, newrelic.com, nr-data.net |
+| **A/B Testing** | optimizely.com |
+| **Other** | contextweb.com, spotxchange.com, lijit.com, sail-horizon.com, bounceexchange.com, imrworldwide.com |
+
+### Cookie Banner Dismissal
+
+Automatic removal of common cookie consent overlays:
+
+| Provider | Selectors |
+|----------|-----------|
+| **CookieBot** | `#CybotCookiebotDialog` |
+| **OneTrust** | `[class*="onetrust"]`, `[id*="onetrust"]` |
+| **Osano** | `[class*="osano"]`, `[id*="osano"]` |
+| **Iubenda** | `[class*="iubenda"]`, `[id*="iubenda"]` |
+| **Generic** | `[class*="cookie-consent"]`, `[class*="cookie-banner"]`, `[class*="consent-popup"]`, `[aria-label*="cookie"]` |
+
+Auto-clicks buttons matching: "Accept All", "Accept Cookies", "Allow All", "I Agree", "Got It", "OK", "Close", "Dismiss", "Continue", "Understood", and more.
+
+### Performance Proof
+
+CNN.com with and without `--ext`:
+
+| Metric | Without | With `--ext` | Reduction |
+|--------|---------|-------------|-----------|
+| Page size | 4,288 KB | 463 KB | **90%** |
+| Ad/tracker requests | 13 | 0 | **100%** |
+| Total requests | 184 | 174 | 5% |
 
 ## Browser Commands (Playwright)
 
@@ -89,6 +177,13 @@ All browser commands support cross-browser testing. Append `chromium`, `firefox`
 node cli.js browser open https://example.com chromium   # Default
 node cli.js browser open https://example.com firefox    # Firefox
 node cli.js browser open https://example.com webkit     # Safari engine
+```
+
+Add `--ext` to any command for ad blocking + cookie dismissal:
+
+```bash
+node cli.js browser screenshot https://example.com page.png --ext
+node cli.js browser open https://example.com --ext
 ```
 
 ### Navigation
@@ -166,7 +261,7 @@ graph LR
 
     subgraph Core["Core Files"]
         CLI[cli.js<br/>Main entry]
-        PW[playwright.js<br/>Browser engine]
+        PW[playwright.js<br/>Browser engine + ad blocking]
         AUTH[auth.js<br/>OAuth server]
     end
 
@@ -174,10 +269,6 @@ graph LR
         GMAIL[gmail.js<br/>Email ops]
         CAL[calendar.js<br/>Calendar ops]
         UNSUB[unsubscribe.js<br/>List cleanup]
-    end
-
-    subgraph Browser["Browser"]
-        BH[browser-harness/<br/>Standalone repo]
     end
 
     subgraph Output["Output"]
@@ -202,6 +293,29 @@ graph LR
     style CAL fill:#9b59b6,color:white
 ```
 
+## Architecture
+
+```mermaid
+flowchart TD
+    A[User runs command with --ext] --> B[launchBrowser]
+    B --> C[setupAdBlocking - page.route]
+    C --> D{Request matches blocklist?}
+    D -->|Yes| E[route.abort - Request blocked]
+    D -->|No| F[route.continue - Request allowed]
+    F --> G[page.goto - Page loads]
+    G --> H[dismissCookieBanners]
+    H --> I[Remove consent overlays]
+    H --> J[Click Accept buttons]
+    I --> K[Take screenshot / Return data]
+    J --> K
+
+    style A fill:#ff6b6b,color:white
+    style C fill:#2ecc71,color:white
+    style E fill:#e74c3c,color:white
+    style F fill:#27ae60,color:white
+    style H fill:#1abc9c,color:white
+```
+
 ## Dependencies
 
 - **playwright** — Cross-browser automation (Chromium, Firefox, WebKit)
@@ -209,6 +323,13 @@ graph LR
 - **googleapis** — Gmail and Calendar APIs
 - **dotenv** — Environment variable loading
 - **express** — OAuth callback server
+
+## Attribution
+
+- **Ad/Tracker Domain List** — Inspired by [uBlock Origin](https://github.com/gorhill/uBlock) filter lists (GPL-3.0). Domain list curated from EasyList, EasyPrivacy, and uBlock Origin's built-in filters.
+- **Cookie Banner Selectors** — Inspired by [No Cookie Banners](https://github.com/JeannedArk/no-cookie-banners-browser-extension) (MIT). Selector patterns adapted from their content script.
+- **Mouse Emulation** — Bezier curve algorithm for natural mouse movement paths.
+- **Playwright** — [Microsoft Playwright](https://github.com/microsoft/playwright) (Apache-2.0) for cross-browser automation.
 
 ## License
 
