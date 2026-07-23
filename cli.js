@@ -5,6 +5,14 @@ const express = require('express');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
+const {
+  nav, getText, fillAndSubmit, execScript, downloadPage, cookies, headers, multiTab,
+  screenshotFullPage, screenshotViewport, screenshotElement, screenshotClip,
+  screenshotPdf, screenshotMultiple, screenshotCompare, crossBrowserTest,
+  mouseMove, mouseClick, mouseDoubleClick, mouseRightClick, mouseDrag,
+  mouseHover, mouseScroll, mousePath, mouseWiggle,
+  getAccessibilityTree, interceptRequests,
+} = require('./playwright');
 
 const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI } = process.env;
 const TOKEN_PATH = 'token.json';
@@ -212,132 +220,70 @@ function auth() {
   });
 }
 
-// ── Browser ────────────────────────────────────────────
-
-const SCREENSHOTS_DIR = require('path').join(__dirname, 'screenshots');
-
-async function ensureDir(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-async function launchBrowser() {
-  await ensureDir(SCREENSHOTS_DIR);
-  const puppeteer = require('puppeteer');
-  return puppeteer.launch({
-    headless: false,
-    args: ['--remote-debugging-port=9222', '--no-first-run', '--disable-extensions'],
-  });
-}
-
-async function browserOpen(url) {
-  const browser = await launchBrowser();
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2' });
-  console.log(`Title: ${await page.title()}`);
-  console.log(`URL: ${page.url()}`);
-  await browser.close();
-}
-
-async function browserScreenshot(url, filename) {
-  const browser = await launchBrowser();
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2' });
-  const name = filename || `screenshot-${Date.now()}.png`;
-  const outPath = require('path').join(SCREENSHOTS_DIR, name);
-  await page.screenshot({ path: outPath, fullPage: true });
-  console.log(`Screenshot saved: ${outPath}`);
-  console.log(`Title: ${await page.title()}`);
-  await browser.close();
-}
-
-async function browserText(url) {
-  const browser = await launchBrowser();
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2' });
-  const text = await page.evaluate(() => document.body.innerText);
-  console.log(text);
-  await browser.close();
-}
-
-async function browserFill(url, selector, value) {
-  const browser = await launchBrowser();
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2' });
-  await page.type(selector, value);
-  await page.keyboard.press('Enter');
-  await new Promise(r => setTimeout(r, 2000));
-  console.log(`Title: ${await page.title()}`);
-  const name = `form-result-${Date.now()}.png`;
-  const outPath = require('path').join(SCREENSHOTS_DIR, name);
-  await page.screenshot({ path: outPath, fullPage: true });
-  console.log(`Result: ${outPath}`);
-  await browser.close();
-}
-
-async function browserExec(url, script) {
-  const browser = await launchBrowser();
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2' });
-  const result = await page.evaluate(script);
-  console.log(JSON.stringify(result, null, 2));
-  await browser.close();
-}
-
-async function browserDownload(url, output) {
-  const browser = await launchBrowser();
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2' });
-  const html = await page.content();
-  const name = output || `page-${Date.now()}.html`;
-  const outPath = require('path').join(__dirname, name);
-  fs.writeFileSync(outPath, html);
-  console.log(`Saved: ${outPath} (${html.length} bytes)`);
-  await browser.close();
-}
-
-async function browserTabs(urls) {
-  const browser = await launchBrowser();
-  for (const url of urls) {
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    console.log(`${url} -> ${await page.title()}`);
-  }
-  const pages = await browser.pages();
-  const name = `multi-tab-${Date.now()}.png`;
-  const outPath = require('path').join(SCREENSHOTS_DIR, name);
-  await pages[pages.length - 1].screenshot({ path: outPath, fullPage: true });
-  console.log(`Last tab screenshot: ${outPath}`);
-  await browser.close();
-}
-
 // ── CLI Router ─────────────────────────────────────────
 
 const [,, cmd, sub, ...args] = process.argv;
+
+const VALID_BROWSERS = ['chromium', 'firefox', 'webkit'];
+const lastArg = args[args.length - 1];
+const browserType = VALID_BROWSERS.includes(lastArg) ? lastArg : 'chromium';
+const cmdArgs = VALID_BROWSERS.includes(lastArg) ? args.slice(0, -1) : args;
 
 function usage() {
   console.log(`
 Usage: node cli.js <command> <subcommand> [args]
 
-Commands:
-  gmail list [count]              List recent emails
-  gmail send <to> <subject> <body>  Send an email
-  gmail clear                     Delete first 100 emails
+Gmail:
+  gmail list [count]                 List recent emails
+  gmail send <to> <subject> <body>   Send an email
+  gmail clear                        Delete first 100 emails
 
-  calendar list [count]           List upcoming events
+Calendar:
+  calendar list [count]              List upcoming events
   calendar create <title> <start> <end> [desc]  Create event
-  calendar delete <eventId>       Delete an event
-  calendar free [date]            Find free slots (YYYY-MM-DD)
+  calendar delete <eventId>          Delete an event
+  calendar free [date]               Find free slots (YYYY-MM-DD)
 
-  browser open <url>              Navigate and print title
-  browser screenshot <url> [file] Save full-page screenshot
-  browser text <url>              Extract page text
-  browser fill <url> <sel> <val>  Fill input and submit
-  browser exec <url> <js>         Run JS in page context
-  browser download <url> [file]   Save page HTML
-  browser tabs <url1> <url2> ...  Open multiple tabs
+Browser Navigation (Playwright):
+  browser open <url> [engine]        Navigate (chromium/firefox/webkit)
+  browser text <url> [engine]        Extract page text
+  browser fill <url> <sel> <val>     Fill input and submit
+  browser exec <url> <js> [engine]   Run JS in page
+  browser download <url> [file]      Save page HTML
+  browser cookies <url> [engine]     Get page cookies
+  browser headers <url> [engine]     Get meta tags
+  browser tabs <url1> <url2> ...     Open multiple tabs
 
-  unsubscribe [maxEmails]         Unsubscribe from mailing lists
-  auth                            Authenticate with Google
+Screenshots:
+  browser screenshot <url> [file]    Full-page screenshot
+  browser viewport <url> [WxH]       Custom resolution
+  browser element <url> <selector>   Screenshot element
+  browser clip <url> {x,y,w,h}      Clipped region
+  browser compare <url1> <url2>      Compare two pages
+  browser pdf <url> [file]           Save as PDF
+  browser multi-shot <url> [n] [ms]  Multiple screenshots
+  browser cross-browser <url>        Test all browsers
+
+Mouse Emulation:
+  browser move <url> x1 y1 x2 y2    Move mouse (bezier)
+  browser click <url> x y [btn]      Click at coordinates
+  browser double-click <url> x y     Double-click
+  browser right-click <url> x y      Right-click
+  browser drag <url> x1 y1 x2 y2    Drag with bezier path
+  browser hover <url> x y [ms]       Hover at coordinates
+  browser scroll <url> x y dx dy     Mouse wheel
+  browser path <url> x1,y1 x2,y2    Multiple waypoints
+  browser wiggle <url> x y [r] [ms]  Human-like idle
+
+Advanced:
+  browser a11y <url>                 Accessibility tree
+  browser intercept <url> [types]    Block resource types
+
+Other:
+  unsubscribe [maxEmails]            Unsubscribe from mailing lists
+  auth                               Authenticate with Google
+
+Append engine name to use Firefox/WebKit: ... chromium (default)
 `);
 }
 
@@ -345,26 +291,55 @@ Commands:
   try {
     switch (cmd) {
       case 'gmail':
-        if (sub === 'list') await gmailList(parseInt(args[0]) || 10);
-        else if (sub === 'send') await gmailSend(args[0], args[1], args.slice(2).join(' '));
+        if (sub === 'list') await gmailList(parseInt(cmdArgs[0]) || 10);
+        else if (sub === 'send') await gmailSend(cmdArgs[0], cmdArgs[1], cmdArgs.slice(2).join(' '));
         else if (sub === 'clear') await gmailClear();
         else usage();
         break;
       case 'calendar':
-        if (sub === 'list') await calendarList(parseInt(args[0]) || 10);
-        else if (sub === 'create') await calendarCreate(args[0], args[1], args[2], args.slice(3).join(' ') || '');
-        else if (sub === 'delete') await calendarDelete(args[0]);
-        else if (sub === 'free') await calendarFree(args[0] || new Date().toISOString().split('T')[0]);
+        if (sub === 'list') await calendarList(parseInt(cmdArgs[0]) || 10);
+        else if (sub === 'create') await calendarCreate(cmdArgs[0], cmdArgs[1], cmdArgs[2], cmdArgs.slice(3).join(' ') || '');
+        else if (sub === 'delete') await calendarDelete(cmdArgs[0]);
+        else if (sub === 'free') await calendarFree(cmdArgs[0] || new Date().toISOString().split('T')[0]);
         else usage();
         break;
       case 'browser':
-        if (sub === 'open') await browserOpen(args[0] || 'https://example.com');
-        else if (sub === 'screenshot') await browserScreenshot(args[0] || 'https://example.com', args[1]);
-        else if (sub === 'text') await browserText(args[0] || 'https://example.com');
-        else if (sub === 'fill') await browserFill(args[0], args[1], args.slice(2).join(' '));
-        else if (sub === 'exec') await browserExec(args[0], args.slice(1).join(' '));
-        else if (sub === 'download') await browserDownload(args[0], args[1]);
-        else if (sub === 'tabs') await browserTabs(args);
+        if (sub === 'open') await nav(cmdArgs[0], browserType);
+        else if (sub === 'text') await getText(cmdArgs[0], browserType);
+        else if (sub === 'fill') await fillAndSubmit(cmdArgs[0], cmdArgs[1], cmdArgs.slice(2).join(' '), browserType);
+        else if (sub === 'exec') await execScript(cmdArgs[0], cmdArgs.slice(1).join(' '), browserType);
+        else if (sub === 'download') await downloadPage(cmdArgs[0], cmdArgs[1], browserType);
+        else if (sub === 'cookies') await cookies(cmdArgs[0], browserType);
+        else if (sub === 'headers') await headers(cmdArgs[0], browserType);
+        else if (sub === 'tabs') await multiTab(cmdArgs, browserType);
+        else if (sub === 'screenshot') await screenshotFullPage(cmdArgs[0], cmdArgs[1], browserType);
+        else if (sub === 'viewport') {
+          const [w, h] = (cmdArgs[1] || '1920x1080').split('x').map(Number);
+          await screenshotViewport(cmdArgs[0], null, { width: w, height: h }, browserType);
+        }
+        else if (sub === 'element') await screenshotElement(cmdArgs[0], null, cmdArgs[1], browserType);
+        else if (sub === 'clip') await screenshotClip(cmdArgs[0], null, JSON.parse(cmdArgs[1] || '{}'), browserType);
+        else if (sub === 'compare') await screenshotCompare(cmdArgs[0], cmdArgs[1], browserType);
+        else if (sub === 'pdf') await screenshotPdf(cmdArgs[0], cmdArgs[1], browserType);
+        else if (sub === 'multi-shot') await screenshotMultiple(cmdArgs[0], parseInt(cmdArgs[1]) || 3, parseInt(cmdArgs[2]) || 1000, browserType);
+        else if (sub === 'cross-browser') await crossBrowserTest(cmdArgs[0]);
+        else if (sub === 'move') await mouseMove(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), { steps: parseInt(cmdArgs[5]) || 20 }, browserType);
+        else if (sub === 'click') await mouseClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { button: cmdArgs[3] || 'left' }, browserType);
+        else if (sub === 'double-click') await mouseDoubleClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browserType);
+        else if (sub === 'right-click') await mouseRightClick(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), browserType);
+        else if (sub === 'drag') await mouseDrag(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]), parseInt(cmdArgs[4]), {}, browserType);
+        else if (sub === 'hover') await mouseHover(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { duration: parseInt(cmdArgs[3]) || 1000 }, browserType);
+        else if (sub === 'scroll') await mouseScroll(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), parseInt(cmdArgs[3]) || 0, parseInt(cmdArgs[4]) || 100, browserType);
+        else if (sub === 'path') {
+          const points = cmdArgs.slice(1).map(a => {
+            const [x, y] = a.split(',').map(Number);
+            return { x, y };
+          });
+          await mousePath(cmdArgs[0], points, {}, browserType);
+        }
+        else if (sub === 'wiggle') await mouseWiggle(cmdArgs[0], parseInt(cmdArgs[1]), parseInt(cmdArgs[2]), { radius: parseInt(cmdArgs[3]) || 20, duration: parseInt(cmdArgs[4]) || 2000 }, browserType);
+        else if (sub === 'a11y') await getAccessibilityTree(cmdArgs[0], browserType);
+        else if (sub === 'intercept') await interceptRequests(cmdArgs[0], cmdArgs[1] ? cmdArgs[1].split(',') : ['image'], browserType);
         else usage();
         break;
       case 'unsubscribe':
