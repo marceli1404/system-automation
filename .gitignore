@@ -3,5 +3,6 @@ node_modules/
 token.json
 *.png
 *.html
+!index.html
 screenshots/
 browser-harness/
