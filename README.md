@@ -498,6 +498,68 @@ node demo.js    # Run the full multi-step demo
 
 The demo exercises navigation, screenshots, mouse emulation (bezier curves, drag, hover, scroll, path, wiggle), and form filling across multiple sites.
 
+### How It Works
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant CLI as node browser.js
+    participant BR as browser.js
+    participant Launch as puppeteer.launch
+    participant Page as Chromium Page
+    participant FS as fs / path
+    participant Site as Target Website
+
+    User->>CLI: node browser.js move https://example.com 100 100 500 400 30
+    CLI->>BR: Parse command + args
+    BR->>Launch: puppeteer.launch({ headless: false, args })
+    Launch-->>BR: browser instance
+    BR->>Page: browser.newPage()
+    BR->>Page: page.setViewport({ width: 1920, height: 1080 })
+    BR->>Page: page.goto(url, { waitUntil: 'networkidle2' })
+    Page->>Site: GET request
+    Site-->>Page: HTML response
+    BR->>BR: generateBezierPath(startX, startY, endX, endY, steps)
+    Note over BR: Cubic bezier with randomized<br/>control points + randomDelay()
+    loop Each bezier point
+        BR->>Page: page.mouse.move(x, y)
+        BR->>BR: await setTimeout(delay + randomDelay())
+    end
+    BR->>Page: page.screenshot({ path })
+    Page-->>BR: Screenshot captured
+    BR->>FS: path.join(screenshots, name)
+    BR->>FS: fs.mkdirSync (ensure dir)
+    BR-->>CLI: Return result
+    CLI-->>User: Console output + file path
+    BR->>Page: browser.close()
+```
+
+### Mouse Emulation Flow (Bezier Curves)
+
+```mermaid
+flowchart TD
+    A[mouseMove called with startX,startY → endX,endY] --> B[generateBezierPath]
+    B --> C[Calculate mid point]
+    C --> D[Randomize control point 1]
+    D --> E[Randomize control point 2]
+    E --> F[Generate N steps along curve]
+    F --> G[bezierCurve formula]
+    G --> H[Array of {x,y} points]
+    
+    H --> I[page.mouse.move to start]
+    I --> J[For each point in path]
+    J --> K[page.mouse.move point.x, point.y]
+    K --> L[await delay + randomDelay 5-25ms]
+    L --> J
+    
+    J -->|Done| M[Return { steps: N }]
+    
+    style A fill:#3498db,color:white
+    style G fill:#e67e22,color:white
+    style H fill:#9b59b6,color:white
+    style M fill:#2ecc71,color:white
+```
+
 ### Playwright vs Puppeteer
 
 | Feature | Playwright (`cli.js browser`) | Puppeteer (`node browser.js`) |
