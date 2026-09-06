@@ -23,23 +23,30 @@ function fetchUrl(url) {
   });
 }
 
-async function unsubscribeFromAll() {
+async function unsubscribeFromAll(confirm) {
   const res = await gmail.users.messages.list({ userId: 'me', maxResults: 50 });
   const messages = res.data.messages || [];
-  console.log(`Checking ${messages.length} emails...\n`);
+  console.log(`Checking ${messages.length} emails...`);
+  console.log(confirm ? '' : '(dry run — pass --confirm to actually send)\n');
 
   let count = 0;
   for (const msg of messages) {
     const full = await gmail.users.messages.get({ userId: 'me', id: msg.id, format: 'full' });
     const headers = full.data.payload.headers;
     const from = headers.find(h => h.name === 'From')?.value || '';
-    const subject = headers.find(h => h.name === 'Subject')?.value || '';
     const unsubscribeHeader = headers.find(h => h.name === 'List-Unsubscribe');
 
     if (unsubscribeHeader) {
-      const match = unsubscribeHeader.value.match(/<(https?:\/\/[^>]+)>/);
+      // Only follow https unsubscribe links. A blind GET to any URL from an
+      // email confirms your address is live and can be abused for tracking.
+      const match = unsubscribeHeader.value.match(/<(https:\/\/[^>]+)>/);
       if (match) {
         const url = match[1];
+        if (!confirm) {
+          console.log(`Would unsubscribe from: ${from}\n  ${url}`);
+          count++;
+          continue;
+        }
         console.log(`Unsubscribing from: ${from}`);
         try {
           await fetchUrl(url);
@@ -51,7 +58,9 @@ async function unsubscribeFromAll() {
       }
     }
   }
-  console.log(`\nUnsubscribed from ${count} mailing lists`);
+  console.log(confirm
+    ? `\nUnsubscribed from ${count} mailing lists`
+    : `\n${count} mailing lists found. Re-run with --confirm to unsubscribe.`);
 }
 
-unsubscribeFromAll();
+unsubscribeFromAll(process.argv.includes('--confirm'));
