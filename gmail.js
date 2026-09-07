@@ -28,10 +28,12 @@ async function clearInbox() {
   console.log(`Found ${messages.length} emails`);
 
   for (const msg of messages) {
-    await gmail.users.messages.delete({ userId: 'me', id: msg.id });
-    console.log(`Deleted: ${msg.id}`);
+    // Move to Trash (recoverable for 30 days) rather than messages.delete,
+    // which permanently and irreversibly removes the message.
+    await gmail.users.messages.trash({ userId: 'me', id: msg.id });
+    console.log(`Trashed: ${msg.id}`);
   }
-  console.log('Inbox cleared!');
+  console.log('Inbox cleared! (messages moved to Trash)');
 }
 
 async function listEmails(max = 10) {

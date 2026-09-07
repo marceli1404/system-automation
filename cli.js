@@ -64,10 +64,12 @@ async function gmailClear() {
   const messages = res.data.messages || [];
   console.log(`Found ${messages.length} emails`);
   for (const msg of messages) {
-    await gmail.users.messages.delete({ userId: 'me', id: msg.id });
-    console.log(`Deleted: ${msg.id}`);
+    // Move to Trash (recoverable for 30 days) rather than messages.delete,
+    // which permanently and irreversibly removes the message.
+    await gmail.users.messages.trash({ userId: 'me', id: msg.id });
+    console.log(`Trashed: ${msg.id}`);
   }
-  console.log('Inbox cleared!');
+  console.log('Inbox cleared! (messages moved to Trash)');
 }
 
 // ── Calendar ───────────────────────────────────────────
@@ -163,11 +165,16 @@ function fetchUrl(url) {
   });
 }
 
-async function unsubscribe(maxEmails) {
+async function unsubscribe(maxEmails, confirm) {
   const gmail = getGmail();
   const res = await gmail.users.messages.list({ userId: 'me', maxResults: maxEmails });
   const messages = res.data.messages || [];
-  console.log(`Checking ${messages.length} emails...\n`);
+  console.log(`Checking ${messages.length} emails...`);
+  if (!confirm) {
+    console.log('(dry run — showing what would be requested; pass --confirm to send)\n');
+  } else {
+    console.log('');
+  }
 
   let count = 0;
   for (const msg of messages) {
@@ -176,8 +183,15 @@ async function unsubscribe(maxEmails) {
     const from = headers.find(h => h.name === 'From')?.value || '';
     const unsub = headers.find(h => h.name === 'List-Unsubscribe');
     if (unsub) {
-      const match = unsub.value.match(/<(https?:\/\/[^>]+)>/);
+      // Only follow https unsubscribe links. A blind GET to any URL from an
+      // email confirms your address is live and can be abused for tracking.
+      const match = unsub.value.match(/<(https:\/\/[^>]+)>/);
       if (match) {
+        if (!confirm) {
+          console.log(`Would unsubscribe from: ${from}\n  ${match[1]}`);
+          count++;
+          continue;
+        }
         console.log(`Unsubscribing from: ${from}`);
         try {
           await fetchUrl(match[1]);
@@ -189,7 +203,9 @@ async function unsubscribe(maxEmails) {
       }
     }
   }
-  console.log(`\nUnsubscribed from ${count} mailing lists`);
+  console.log(confirm
+    ? `\nUnsubscribed from ${count} mailing lists`
+    : `\n${count} mailing lists found. Re-run with --confirm to unsubscribe.`);
 }
 
 // ── Auth ───────────────────────────────────────────────
@@ -241,7 +257,7 @@ Usage: node cli.js <command> <subcommand> [args] [--ext] [--stealth]
 Gmail:
   gmail list [count]                 List recent emails
   gmail send <to> <subject> <body>   Send an email
-  gmail clear                        Delete first 100 emails
+  gmail clear                        Move first 100 emails to Trash
 
 Calendar:
   calendar list [count]              List upcoming events
@@ -288,7 +304,7 @@ Search:
   browser search <url> <sel> <query> Search and extract results
 
 Other:
-  unsubscribe [maxEmails]            Unsubscribe from mailing lists
+  unsubscribe [maxEmails] [--confirm]  List unsubscribe links (dry run); --confirm to send
   auth                               Authenticate with Google
   stealth-health                     Check rayobrowse daemon status
 
@@ -371,7 +387,7 @@ Append engine name to use Firefox/WebKit: ... chromium (default)
         else usage();
         break;
       case 'unsubscribe':
-        await unsubscribe(parseInt(sub) || 50);
+        await unsubscribe(parseInt(sub) || 50, process.argv.includes('--confirm'));
         break;
       case 'auth':
         auth();
